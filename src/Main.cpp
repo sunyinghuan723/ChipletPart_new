@@ -578,7 +578,7 @@ int main(int argc, char *argv[]) {
         }
       }
       
-      if (firstOptionalIdx < 10) {
+      if (firstOptionalIdx < 9) {
         Console::Error("Not enough required arguments for genetic tech partitioning");
         displayUsage(argv[0]);
         return 1;
@@ -599,24 +599,7 @@ int main(int argc, char *argv[]) {
       std::vector<std::string> techNodes;
       std::string techNodesStr;
       if (getArgValue(argc, argv, "--tech-nodes", techNodesStr)) {
-        // Find all tech nodes after --tech-nodes
-        int techNodesIdx = -1;
-        for (size_t i = 0; i < args.size(); i++) {
-          if (args[i] == "--tech-nodes") {
-            techNodesIdx = i;
-            break;
-          }
-        }
-        
-        if (techNodesIdx >= 0) {
-          // Add all arguments after --tech-nodes until the next option
-          for (size_t i = techNodesIdx + 1; i < args.size(); i++) {
-            if (args[i][0] == '-' && args[i][1] == '-') {
-              break;
-            }
-            techNodes.push_back(args[i]);
-          }
-        }
+        techNodes = parseTechList(techNodesStr);
       }
       
       if (techNodes.empty()) {

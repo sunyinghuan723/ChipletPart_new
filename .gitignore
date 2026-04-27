@@ -1,0 +1,20 @@
+# Local build outputs
+build/
+results/
+output.map
+*.log
+
+# Local dependency/cache directories
+.cache/
+.conda-env/
+.conda-pkgs/
+.codex
+
+# Generated partition outputs
+*.cpart.*
+*.genetic_tech_part.*
+*.best_tech_assignment.txt
+*.canonical_forms.log
+canonical_ga_result*
+best_partition.aspect_ratios
+best_partition.coords

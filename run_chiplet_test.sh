@@ -318,7 +318,10 @@ elif [ "$USE_GENETIC" = true ]; then
         "$BLOCKS" \
         "$DEFAULT_REACH" \
         "$DEFAULT_SEPARATION" \
-        "$TECH_NODES" \
+        --genetic-tech-part \
+        --tech-nodes "$TECH_NODES" \
+        --generations "$DEFAULT_GENERATIONS" \
+        --population "$DEFAULT_POPULATION" \
         --seed "$DEFAULT_SEED"
 else
     echo -e "${GREEN}Running standard partitioning for test case: ${TEST_CASE_NAME}${NC}"
@@ -361,3 +364,5 @@ if [ "$USE_TECH_ENUM" = true ] || [ "$USE_CANONICAL_GA" = true ]; then
     echo -e "${CYAN}                     Test Script Completed                          ${NC}"
     echo -e "${CYAN}====================================================================${NC}"
 fi 
+
+exit $exit_code

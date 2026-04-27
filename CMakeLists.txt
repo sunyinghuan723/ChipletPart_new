@@ -59,13 +59,12 @@ endif()
 # ---------------------------------------------------------------------------
 # METIS and GKlib (local installation)
 # ---------------------------------------------------------------------------
-# Set the METIS root directory based on your local installation.
-set(METIS_ROOT "/home/fetzfs_projects/TritonPart/bodhi/branch_chiplet/branch_JETCAS/ChipletPart/METIS")
-# Define GKlib root directory.
-set(GKLIB_ROOT "/home/fetzfs_projects/TritonPart/bodhi/branch_chiplet/branch_JETCAS/ChipletPart/GKlib")
+# Set the METIS/GKlib root directories relative to this checkout.
+set(METIS_ROOT "${PROJECT_SOURCE_DIR}/METIS")
+set(GKLIB_ROOT "${PROJECT_SOURCE_DIR}/GKlib")
 
 # Include GKlib headers so that types like idx_t and real_t are defined.
-include_directories(${GKLIB_ROOT})
+include_directories(${GKLIB_ROOT}/include)
 
 if(EXISTS "${METIS_ROOT}/include/metis.h")
     add_definitions(-DIDXTYPEWIDTH=64)
@@ -73,24 +72,21 @@ if(EXISTS "${METIS_ROOT}/include/metis.h")
     message(STATUS "Using local METIS from ${METIS_ROOT}")
     include_directories(${METIS_ROOT}/include)
     
-    # Build GKlib as a static library.
-    file(GLOB GKLIB_SOURCES "${GKLIB_ROOT}/*.c")
-    if(GKLIB_SOURCES)
-        add_library(gk STATIC ${GKLIB_SOURCES})
-        message(STATUS "Built GKlib static library from ${GKLIB_ROOT}")
-    else()
-        message(FATAL_ERROR "No GKlib source files found in ${GKLIB_ROOT}")
-    endif()
+    add_subdirectory(${GKLIB_ROOT} ${CMAKE_BINARY_DIR}/GKlib-build EXCLUDE_FROM_ALL)
 
-    # If METIS has its own CMakeLists.txt, add it as a subdirectory.
-    if(EXISTS "${METIS_ROOT}/CMakeLists.txt")
-        add_subdirectory(${METIS_ROOT} ${METIS_ROOT}/build EXCLUDE_FROM_ALL)
+    file(GLOB METIS_SOURCES "${METIS_ROOT}/libmetis/*.c")
+    if(METIS_SOURCES)
+        add_library(metis STATIC ${METIS_SOURCES})
+        target_include_directories(metis PUBLIC
+            ${METIS_ROOT}/include
+            ${METIS_ROOT}/libmetis
+            ${GKLIB_ROOT}/include)
+        target_compile_definitions(metis PUBLIC IDXTYPEWIDTH=64 REALTYPEWIDTH=64)
+        target_link_libraries(metis PUBLIC GKlib)
+        message(STATUS "Built local METIS static library from ${METIS_ROOT}")
         set(HAVE_METIS TRUE)
     else()
-        # If METIS is already built and available as a library, specify its library directory.
-        set(METIS_LIBRARY_DIR "${METIS_ROOT}/lib")
-        link_directories(${METIS_LIBRARY_DIR})
-        set(HAVE_METIS TRUE)
+        message(FATAL_ERROR "No METIS source files found in ${METIS_ROOT}/libmetis")
     endif()
 else()
     message(FATAL_ERROR "Local METIS not found in ${METIS_ROOT}/include")
@@ -129,12 +125,14 @@ endif()
 # Pugixml
 # ---------------------------------------------------------------------------
 add_library(pugixml STATIC ${PROJECT_SOURCE_DIR}/src/pugixml.cpp)
+target_include_directories(pugixml PUBLIC ${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_SOURCE_DIR})
 
 # ---------------------------------------------------------------------------
 # Global include directories
 # ---------------------------------------------------------------------------
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/cost_model)
 include_directories(${PROJECT_SOURCE_DIR}/cost_model/include)
@@ -179,7 +177,7 @@ if(BUILD_MAIN_APP)
     
     # Link METIS and GKlib if available and not disabled (on non-Apple platforms)
     if(HAVE_METIS AND (NOT APPLE))
-        target_link_libraries(chipletPart PRIVATE metis gk)
+        target_link_libraries(chipletPart PRIVATE metis GKlib)
     endif()
     
     # Link OpenMP if found.
