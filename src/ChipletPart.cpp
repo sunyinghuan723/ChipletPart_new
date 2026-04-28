@@ -43,6 +43,7 @@
 #include "GeneticTechPartitioner.h"
 #include "CanonicalGA.h" // Add include for CanonicalGA
 #include "Console.h" // Include Console.h for formatting
+#include "ThermalAwareEvaluator.h"
 #include <chrono>
 #include <codecvt>
 #include <filesystem>
@@ -1266,6 +1267,7 @@ void ChipletPart::GeneticTechPart(
   
   // Set the pointer to this ChipletPart instance for advanced partitioning methods
   partitioner.SetChipletPart(this);
+  partitioner.SetThermalConfig(thermal_config_);
   
   // Run the genetic algorithm
   Console::Info("Running genetic algorithm...");
@@ -1805,6 +1807,10 @@ void ChipletPart::Partition(
     int partition_idx;
     int num_parts;
     float cost;
+    float base_cost;
+    double thermal_t_max = 0.0;
+    double thermal_t_avg = 0.0;
+    double thermal_penalty = 0.0;
     std::vector<int> partition;
     std::vector<float> aspect_ratios;
     std::vector<float> x_locations;
@@ -1818,6 +1824,13 @@ void ChipletPart::Partition(
   
   // Mutex for thread-safe access to the results vector
   std::mutex results_mutex;
+
+  std::shared_ptr<ThermalAwareEvaluator> thermal_evaluator;
+  if (thermal_config_.enable_thermal) {
+    thermal_evaluator = std::make_shared<ThermalAwareEvaluator>(
+        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+    Console::Info("[THERMAL] Thermal-aware partition ranking is enabled");
+  }
   
   // Atomic counter to track progress
   std::atomic<int> partitions_processed(0);
@@ -2234,12 +2247,31 @@ void ChipletPart::Partition(
         }
         
         float final_cost = thread_refiner->GetCostFromScratch(partition_copy);
+        float base_cost = final_cost;
         int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
+        double thermal_t_max = 0.0;
+        double thermal_t_avg = 0.0;
+        double thermal_penalty = 0.0;
+        if (thermal_evaluator && thermal_evaluator->Enabled() && success &&
+            final_cost < std::numeric_limits<float>::max() - 1.0f) {
+          std::vector<std::string> thermal_tech(final_num_parts, tech);
+          auto thermal_eval = thermal_evaluator->Evaluate(
+              final_cost, partition_copy, thermal_tech, result_aspect_ratios,
+              result_x_locations, result_y_locations, success);
+          final_cost = static_cast<float>(thermal_eval.objective);
+          thermal_t_max = thermal_eval.thermal.t_max;
+          thermal_t_avg = thermal_eval.thermal.t_avg;
+          thermal_penalty = thermal_eval.peak_penalty + thermal_eval.avg_penalty;
+        }
         // Store results for this partition
         PartitionResult result;
         result.partition_idx = i;
         result.num_parts = final_num_parts;
         result.cost = final_cost;
+        result.base_cost = base_cost;
+        result.thermal_t_max = thermal_t_max;
+        result.thermal_t_avg = thermal_t_avg;
+        result.thermal_penalty = thermal_penalty;
         result.partition = partition_copy;
         result.aspect_ratios = result_aspect_ratios;
         result.x_locations = result_x_locations;
@@ -2314,6 +2346,12 @@ void ChipletPart::Partition(
     Console::TableRow({"Partition index", std::to_string(best_result.partition_idx)}, result_widths);
     Console::TableRow({"Number of parts", std::to_string(best_result.num_parts)}, result_widths);
     Console::TableRow({"Cost", std::to_string(best_result.cost)}, result_widths);
+    if (thermal_config_.enable_thermal) {
+      Console::TableRow({"Base cost", std::to_string(best_result.base_cost)}, result_widths);
+      Console::TableRow({"Thermal T_max", std::to_string(best_result.thermal_t_max)}, result_widths);
+      Console::TableRow({"Thermal T_avg", std::to_string(best_result.thermal_t_avg)}, result_widths);
+      Console::TableRow({"Thermal penalty", std::to_string(best_result.thermal_penalty)}, result_widths);
+    }
     Console::TableRow({"Feasibility", best_result.valid ? "Yes" : "No"}, result_widths);
     Console::TableRow({"Aspect Ratios", aspect_ratios_str}, result_widths);
     std::cout << std::endl;
@@ -2503,11 +2541,19 @@ void ChipletPart::EvaluatePartition(
   refiner->SetAspectRatios(result_aspect_ratios);
   refiner->SetXLocations(result_x_locations);
   refiner->SetYLocations(result_y_locations);
-  std::vector<std::string> tech_array(num_parts, tech);
+  std::vector<std::string> tech_array(num_parts_, tech);
   refiner->SetTechArray(tech_array);
         
   // Run refinement
   float initial_cost = refiner->GetCostFromScratch(partition);
+  if (thermal_config_.enable_thermal) {
+    ThermalAwareEvaluator thermal_evaluator(
+        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+    auto thermal_eval = thermal_evaluator.Evaluate(
+        initial_cost, partition, tech_array, result_aspect_ratios,
+        result_x_locations, result_y_locations, success);
+    initial_cost = static_cast<float>(thermal_eval.objective);
+  }
   Console::Info("Cost of partition is " + std::to_string(initial_cost));
   Console::Info("Number of partitions is " + std::to_string(num_parts_));
   Console::Info("Floorplan feasibility is " + std::to_string(success));
@@ -3761,6 +3807,17 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                 
                 // Evaluate cost of single partition
                 float cost = refiner->GetCostFromScratch(single_partition);
+                if (thermal_config_.enable_thermal) {
+                    ThermalAwareEvaluator thermal_evaluator(
+                        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+                    std::vector<float> aspect_ratios(1, 1.0f);
+                    std::vector<float> x_locations(1, 0.0f);
+                    std::vector<float> y_locations(1, 0.0f);
+                    auto thermal_eval = thermal_evaluator.Evaluate(
+                        cost, single_partition, tech_assignment, aspect_ratios,
+                        x_locations, y_locations, true);
+                    cost = static_cast<float>(thermal_eval.objective);
+                }
                 
                 // Store the partition in the solution_ member for later use
                 solution_ = single_partition;
@@ -3958,8 +4015,33 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                 // Update the refiner with the new tech array
                 refiner->SetTechArray(tech_array);
                 
+                std::vector<float> thermal_aspect_ratios;
+                std::vector<float> thermal_x_locations;
+                std::vector<float> thermal_y_locations;
+                bool thermal_floorplan_success = true;
+                if (thermal_config_.enable_thermal) {
+                    auto floor_result = refiner->RunFloorplanner(
+                        partition_copy, hypergraph_, 100, 100, 0.00001);
+                    thermal_aspect_ratios = std::get<0>(floor_result);
+                    thermal_x_locations = std::get<1>(floor_result);
+                    thermal_y_locations = std::get<2>(floor_result);
+                    thermal_floorplan_success = std::get<3>(floor_result);
+                    refiner->SetAspectRatios(thermal_aspect_ratios);
+                    refiner->SetXLocations(thermal_x_locations);
+                    refiner->SetYLocations(thermal_y_locations);
+                }
+
                 // Get final cost after refinement
                 float final_cost = refiner->GetCostFromScratch(partition_copy);
+                if (thermal_config_.enable_thermal) {
+                    ThermalAwareEvaluator thermal_evaluator(
+                        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+                    auto thermal_eval = thermal_evaluator.Evaluate(
+                        final_cost, partition_copy, tech_assignment,
+                        thermal_aspect_ratios, thermal_x_locations,
+                        thermal_y_locations, thermal_floorplan_success);
+                    final_cost = static_cast<float>(thermal_eval.objective);
+                }
                 
                 Console::Info(method_name + " partition cost: " + 
                              std::to_string(initial_cost) + " -> " + std::to_string(final_cost));

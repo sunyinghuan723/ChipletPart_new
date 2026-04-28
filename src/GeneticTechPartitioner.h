@@ -36,6 +36,7 @@
 #include "ChipletPart.h"
 #include "FMRefiner.h"
 #include "Hypergraph.h"
+#include "ThermalAwareEvaluator.h"
 #include "omp_utils.h"
 
 #include <vector>
@@ -152,6 +153,10 @@ public:
         chiplet_part_ = chiplet_part;
     }
 
+    void SetThermalConfig(const ThermalConfig& config) {
+        thermal_config_ = config;
+    }
+
 private:
     // Initialize the population with diverse solutions
     void InitializePopulation(
@@ -218,6 +223,8 @@ private:
     std::vector<GeneticSolution> population_;
     GeneticSolution best_solution_;
     std::shared_ptr<ChipletRefiner> refiner_;
+    ThermalConfig thermal_config_;
+    std::shared_ptr<ThermalAwareEvaluator> thermal_evaluator_;
     int tournament_size_ = 3; // Default tournament size
     
     // Mutex for thread safety

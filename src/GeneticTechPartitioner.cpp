@@ -513,6 +513,12 @@ void GeneticTechPartitioner::InitializePopulation(
     return;
   }
 
+  if (thermal_config_.enable_thermal) {
+    thermal_evaluator_ = std::make_shared<ThermalAwareEvaluator>(
+        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+    Console::Info("[THERMAL] Thermal-aware GA fitness is enabled");
+  }
+
   // Generate initial partitions
   std::vector<std::vector<int>> initial_partitions =
       CreateInitialPartitions(min_partitions_, max_partitions_);
@@ -591,6 +597,12 @@ void GeneticTechPartitioner::InitializePopulation(
       // adjust the num_parts and tech assignment
       num_parts = *std::max_element(partition.begin(), partition.end()) + 1;
       float cost = refiner_->GetCostFromScratch(partition);
+      if (thermal_evaluator_ && thermal_evaluator_->Enabled() && success) {
+        auto thermal_eval = thermal_evaluator_->Evaluate(
+            cost, partition, tech_assignment, result_aspect_ratios,
+            result_x_locations, result_y_locations, success);
+        cost = static_cast<float>(thermal_eval.objective);
+      }
       GeneticSolution solution(num_parts, partition, tech_assignment, cost,
                                success);
       population_.push_back(solution);
@@ -877,6 +889,14 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
           // std::cout << "[Fitness Debug] Cost is invalid (inf/nan), setting to
           // max float" << std::endl;
           cost = std::numeric_limits<float>::max();
+        }
+        if (thermal_evaluator_ && thermal_evaluator_->Enabled() && success &&
+            cost < std::numeric_limits<float>::max() - 1.0f) {
+          auto thermal_eval = thermal_evaluator_->Evaluate(
+              cost, solution.partition, solution.tech_nodes,
+              result_aspect_ratios, result_x_locations, result_y_locations,
+              success);
+          cost = static_cast<float>(thermal_eval.objective);
         }
       } catch (const std::exception &e) {
         // std::cout << "[Fitness Debug] Exception in GetCostFromScratch: " <<

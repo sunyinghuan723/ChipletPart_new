@@ -142,9 +142,30 @@ include_directories(${PROJECT_SOURCE_DIR}/cost_model/include)
 # ---------------------------------------------------------------------------
 option(BUILD_COST_MODEL "Build the cost model component" ON)
 option(BUILD_MAIN_APP "Build the main ChipletPart application" ON)
+option(BUILD_THERMAL_TESTS "Build thermal integration smoke tests" ON)
 
 if(BUILD_COST_MODEL)
     add_subdirectory(cost_model)
+endif()
+
+if(BUILD_THERMAL_TESTS AND BUILD_COST_MODEL)
+    add_executable(thermal_mvp_test
+        src/test/test_thermal_mvp.cpp
+        src/ThermalAwareEvaluator.cpp
+        src/ThermalAwareEvaluator.h
+        src/ThermalConfig.h)
+
+    target_link_libraries(thermal_mvp_test PRIVATE cost_model pugixml ${Boost_LIBRARIES} Eigen3::Eigen)
+
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(thermal_mvp_test PRIVATE ${OpenMP_CXX_LIBRARIES})
+    endif()
+
+    enable_testing()
+    add_test(NAME thermal_mvp_test
+             COMMAND thermal_mvp_test ${PROJECT_SOURCE_DIR}/test_data/48_1_14_4_1600_1600)
+elseif(BUILD_THERMAL_TESTS)
+    message(WARNING "BUILD_THERMAL_TESTS requires BUILD_COST_MODEL=ON; skipping thermal tests")
 endif()
 
 if(BUILD_MAIN_APP)
@@ -156,6 +177,7 @@ if(BUILD_MAIN_APP)
         src/FMRefiner.cpp 
         src/PriorityQueue.cpp 
         src/GeneticTechPartitioner.cpp
+        src/ThermalAwareEvaluator.cpp
         src/floorplan.cpp
         src/KLRefiner.cpp
         src/KLRefiner.h
@@ -167,6 +189,8 @@ if(BUILD_MAIN_APP)
         src/Hypergraph.h
         src/floorplan.h
         src/GeneticTechPartitioner.h
+        src/ThermalAwareEvaluator.h
+        src/ThermalConfig.h
         src/CanonicalGA.cpp
         src/CanonicalGA.h
         src/KLRefiner.cpp

@@ -35,6 +35,7 @@
 #pragma once
 //#include "FMRefiner.h"
 #include "Hypergraph.h"
+#include "ThermalConfig.h"
 #include "Utilities.h"
 //#include "floorplan.h"
 
@@ -81,6 +82,14 @@ public:
   
   // Get the current random seed
   int GetSeed() const { return seed_; }
+
+  void SetThermalConfig(const ThermalConfig& config) {
+    thermal_config_ = config;
+  }
+
+  const ThermalConfig& GetThermalConfig() const {
+    return thermal_config_;
+  }
 
   // Original method that reads from a hypergraph file
   void ReadChipletGraph(std::string hypergraph_file,
@@ -319,6 +328,7 @@ private:
   int num_individuals_ = 6;    // number of individuals to be selected for
                                // mating pool
   std::mt19937 rng_;           // random number generator
+  ThermalConfig thermal_config_;
   // std::mt19937 rng_;
 };
 
