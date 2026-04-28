@@ -164,6 +164,18 @@ if(BUILD_THERMAL_TESTS AND BUILD_COST_MODEL)
     enable_testing()
     add_test(NAME thermal_mvp_test
              COMMAND thermal_mvp_test ${PROJECT_SOURCE_DIR}/test_data/48_1_14_4_1600_1600)
+
+    add_executable(thermal_collect_cli
+        src/test/thermal_collect_cli.cpp
+        src/ThermalAwareEvaluator.cpp
+        src/ThermalAwareEvaluator.h
+        src/ThermalConfig.h)
+
+    target_link_libraries(thermal_collect_cli PRIVATE cost_model pugixml ${Boost_LIBRARIES} Eigen3::Eigen)
+
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(thermal_collect_cli PRIVATE ${OpenMP_CXX_LIBRARIES})
+    endif()
 elseif(BUILD_THERMAL_TESTS)
     message(WARNING "BUILD_THERMAL_TESTS requires BUILD_COST_MODEL=ON; skipping thermal tests")
 endif()

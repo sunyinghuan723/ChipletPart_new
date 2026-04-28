@@ -48,6 +48,28 @@ void WriteArray(std::ostream& os, const std::vector<double>& values) {
   os << "]";
 }
 
+void WriteIntArray(std::ostream& os, const std::vector<int>& values) {
+  os << "[";
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) {
+      os << ",";
+    }
+    os << values[i];
+  }
+  os << "]";
+}
+
+void WriteStringArray(std::ostream& os, const std::vector<std::string>& values) {
+  os << "[";
+  for (size_t i = 0; i < values.size(); ++i) {
+    if (i > 0) {
+      os << ",";
+    }
+    os << "\"" << JsonEscape(values[i]) << "\"";
+  }
+  os << "]";
+}
+
 int NumPartitions(const std::vector<int>& partition) {
   int num_partitions = 0;
   for (int part_id : partition) {
@@ -57,6 +79,20 @@ int NumPartitions(const std::vector<int>& partition) {
     num_partitions = std::max(num_partitions, part_id + 1);
   }
   return num_partitions;
+}
+
+std::string PathStemOrUnknown(const std::string& path) {
+  if (path.empty()) {
+    return "unknown";
+  }
+  std::filesystem::path fs_path(path);
+  if (fs_path.has_parent_path()) {
+    const std::string parent = fs_path.parent_path().filename().string();
+    if (!parent.empty()) {
+      return parent;
+    }
+  }
+  return fs_path.stem().empty() ? "unknown" : fs_path.stem().string();
 }
 
 std::string ShortHash(const std::string& text) {
@@ -229,6 +265,20 @@ ThermalInstance ThermalInstanceEncoder::Encode(
   instance.grid_y = config_.grid_y;
   instance.ambient_temperature = config_.ambient_temperature;
   instance.heat_transfer_coefficient = config_.heat_transfer_coefficient;
+  instance.source_testcase = config_.thermal_source_testcase;
+  instance.partition = partition;
+  instance.technology_assignment = techs;
+  instance.channel_names = {
+      "package_domain",
+      "chiplet_footprint",
+      "chiplet_boundary",
+      "power_density_w_per_mm2",
+      "silicon_material",
+      "interposer_material",
+      "tim_material",
+      "package_material",
+      "ambient_temperature",
+      "heat_transfer_coefficient"};
 
   instance.chiplets.reserve(num_partitions);
   double min_x = std::numeric_limits<double>::max();
@@ -359,7 +409,10 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
     return "";
   }
   std::filesystem::create_directories(dump_dir);
-  const std::string file_name = "thermal_instance_" + ShortHash(key) + ".json";
+  const std::string instance_id =
+      instance.instance_id.empty() ? config_.thermal_dump_prefix + "_" + ShortHash(key)
+                                   : instance.instance_id;
+  const std::string file_name = instance_id + ".json";
   const std::filesystem::path path = std::filesystem::path(dump_dir) / file_name;
   std::ofstream os(path);
   if (!os.is_open()) {
@@ -369,21 +422,47 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
 
   os << "{\n";
   os << "  \"schema\": \"chipletpart.thermal_instance.v1\",\n";
+  os << "  \"schema_version\": \"" << JsonEscape(instance.schema_version) << "\",\n";
+  os << "  \"instance_id\": \"" << JsonEscape(instance_id) << "\",\n";
+  os << "  \"source_testcase\": \"" << JsonEscape(instance.source_testcase) << "\",\n";
   os << "  \"units\": {\n";
   os << "    \"length\": \"mm\", \"area\": \"mm^2\", \"power\": \"cost_model_power\",";
   os << " \"power_density\": \"cost_model_power/mm^2\", \"temperature\": \"K\"\n";
   os << "  },\n";
   os << "  \"grid\": {\"x\": " << instance.grid_x << ", \"y\": " << instance.grid_y
      << ", \"z\": " << config_.grid_z << "},\n";
+  os << "  \"grid_x\": " << instance.grid_x << ",\n";
+  os << "  \"grid_y\": " << instance.grid_y << ",\n";
   os << "  \"package\": {\"width_mm\": " << instance.package_width_mm
      << ", \"height_mm\": " << instance.package_height_mm << "},\n";
+  os << "  \"package_width_mm\": " << instance.package_width_mm << ",\n";
+  os << "  \"package_height_mm\": " << instance.package_height_mm << ",\n";
+  os << "  \"channel_names\": ";
+  WriteStringArray(os, instance.channel_names);
+  os << ",\n";
   os << "  \"boundary_conditions\": {\"ambient_temperature\": "
      << instance.ambient_temperature << ", \"heat_transfer_coefficient\": "
      << instance.heat_transfer_coefficient << "},\n";
+  os << "  \"cost_objective\": ";
+  if (instance.has_cost_objective) {
+    os << instance.cost_objective;
+  } else {
+    os << "null";
+  }
+  os << ",\n";
+  os << "  \"partition\": ";
+  WriteIntArray(os, instance.partition);
+  os << ",\n";
+  os << "  \"technology_assignment\": ";
+  WriteStringArray(os, instance.technology_assignment);
+  os << ",\n";
   os << "  \"rasterization\": {\"total_power_before_raster\": "
      << instance.total_power_before_raster << ", \"total_power_after_raster\": "
      << instance.total_power_after_raster << ", \"power_error\": "
      << instance.raster_power_error << "},\n";
+  os << "  \"total_power_before_raster\": " << instance.total_power_before_raster << ",\n";
+  os << "  \"total_power_after_raster\": " << instance.total_power_after_raster << ",\n";
+  os << "  \"raster_power_error\": " << instance.raster_power_error << ",\n";
   os << "  \"chiplets\": [\n";
   for (size_t i = 0; i < instance.chiplets.size(); ++i) {
     const auto& chiplet = instance.chiplets[i];
@@ -420,6 +499,42 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
   WriteArray(os, instance.htc_channel);
   os << "\n  }\n";
   os << "}\n";
+
+  if (!config_.thermal_dump_manifest.empty()) {
+    const bool new_file = !std::filesystem::exists(config_.thermal_dump_manifest);
+    const auto manifest_parent =
+        std::filesystem::path(config_.thermal_dump_manifest).parent_path();
+    if (!manifest_parent.empty()) {
+      std::filesystem::create_directories(manifest_parent);
+    }
+    std::ofstream manifest(config_.thermal_dump_manifest, std::ios::app);
+    if (!manifest.is_open()) {
+      throw std::runtime_error("[THERMAL] Cannot write thermal manifest: " +
+                               config_.thermal_dump_manifest);
+    }
+    double total_power = instance.total_power_before_raster;
+    manifest << "{"
+             << "\"instance_id\":\"" << JsonEscape(instance_id) << "\","
+             << "\"json_path\":\"" << JsonEscape(path.string()) << "\","
+             << "\"testcase\":\"" << JsonEscape(instance.source_testcase) << "\","
+             << "\"num_chiplets\":" << instance.chiplets.size() << ","
+             << "\"technology_assignment\":";
+    WriteStringArray(manifest, instance.technology_assignment);
+    manifest << ",\"cost\":";
+    if (instance.has_cost_objective) {
+      manifest << instance.cost_objective;
+    } else {
+      manifest << "null";
+    }
+    manifest << ",\"total_power\":" << total_power
+             << ",\"label_path\":\"\","
+             << "\"split\":\"" << JsonEscape(config_.thermal_dump_split) << "\""
+             << "}\n";
+    if (new_file) {
+      std::cout << "[THERMAL-DATA] Created manifest "
+                << config_.thermal_dump_manifest << std::endl;
+    }
+  }
   return path.string();
 }
 
@@ -469,10 +584,17 @@ std::string PythonDeepOHeatAdapter::ResolveInferenceScript() const {
   if (!config_.thermal_inference_script.empty()) {
     candidates.push_back(config_.thermal_inference_script);
   }
-  candidates.push_back("DeepOHeat/scripts/infer_package.py");
-  candidates.push_back("../DeepOHeat/scripts/infer_package.py");
-  candidates.push_back("../../DeepOHeat/scripts/infer_package.py");
-  candidates.push_back("../../../DeepOHeat/scripts/infer_package.py");
+  if (config_.thermal_backend == "package_thermal") {
+    candidates.push_back("DeepOHeat/package_thermal/infer_package.py");
+    candidates.push_back("../DeepOHeat/package_thermal/infer_package.py");
+    candidates.push_back("../../DeepOHeat/package_thermal/infer_package.py");
+    candidates.push_back("../../../DeepOHeat/package_thermal/infer_package.py");
+  } else {
+    candidates.push_back("DeepOHeat/scripts/infer_package.py");
+    candidates.push_back("../DeepOHeat/scripts/infer_package.py");
+    candidates.push_back("../../DeepOHeat/scripts/infer_package.py");
+    candidates.push_back("../../../DeepOHeat/scripts/infer_package.py");
+  }
 
   for (const auto& candidate : candidates) {
     if (std::filesystem::exists(candidate)) {
@@ -549,6 +671,9 @@ ThermalResult PythonDeepOHeatAdapter::Predict(const ThermalInstance&,
       << " --instance " << ShellQuote(instance_path)
       << " --model " << ShellQuote(config_.thermal_model_path)
       << " --output " << ShellQuote(output_path.string());
+  if (!config_.thermal_model_config.empty()) {
+    cmd << " --config " << ShellQuote(config_.thermal_model_config);
+  }
 
   const int status = std::system(cmd.str().c_str());
   if (status != 0) {
@@ -582,10 +707,14 @@ ThermalAwareEvaluator::ThermalAwareEvaluator(ThermalConfig config,
       blocks_file_(blocks_file),
       encoder_(config_) {
   if (config_.enable_thermal) {
-    if (config_.use_mock_thermal_model) {
+    if (config_.use_mock_thermal_model || config_.thermal_backend == "mock") {
       surrogate_ = std::make_unique<MockThermalSurrogate>(config_);
-    } else {
+    } else if (config_.thermal_backend == "legacy_2d_power_map" ||
+               config_.thermal_backend == "package_thermal") {
       surrogate_ = std::make_unique<PythonDeepOHeatAdapter>(config_);
+    } else {
+      throw std::runtime_error("[THERMAL] Unknown thermal backend: " +
+                               config_.thermal_backend);
     }
   }
 }
@@ -712,9 +841,16 @@ ThermalEvaluation ThermalAwareEvaluator::Evaluate(
       ThermalInstance instance = encoder_.Encode(partition, tech_assignment, aspect_ratios,
                                                  x_locations, y_locations, blocks_,
                                                  library_dicts_);
+      if (instance.source_testcase.empty()) {
+        instance.source_testcase = PathStemOrUnknown(blocks_file_);
+      }
+      instance.cost_objective = base_cost;
+      instance.has_cost_objective = true;
       const std::string instance_path =
           encoder_.DumpJson(instance, config_.thermal_dump_instances, key);
-      if (!config_.use_mock_thermal_model && instance_path.empty()) {
+      const bool using_mock =
+          config_.use_mock_thermal_model || config_.thermal_backend == "mock";
+      if (!using_mock && instance_path.empty()) {
         throw std::runtime_error("[THERMAL] Non-mock DeepOHeat inference requires "
                                  "--thermal_dump_instances so the adapter has JSON input");
       }

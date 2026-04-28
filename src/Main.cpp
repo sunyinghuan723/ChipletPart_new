@@ -119,7 +119,9 @@ void displayUsage(const char* programName) {
   std::cout << "  --max-partitions <value> : Maximum number of partitions for tech enumeration (default: 4)" << std::endl;
   std::cout << "  --detailed-output     : Generate detailed output for tech enumeration" << std::endl;
   std::cout << "  --enable_thermal      : Enable thermal-aware objective evaluation" << std::endl;
+  std::cout << "  --thermal_backend <mock|legacy_2d_power_map|package_thermal> : Thermal surrogate backend" << std::endl;
   std::cout << "  --thermal_model_path <path> : DeepOHeat checkpoint path for real inference" << std::endl;
+  std::cout << "  --thermal_model_config <path> : Optional package surrogate config JSON" << std::endl;
   std::cout << "  --thermal_budget <float> : Peak temperature budget in Kelvin" << std::endl;
   std::cout << "  --thermal_lambda_peak <float> : Peak-temperature penalty weight" << std::endl;
   std::cout << "  --thermal_lambda_avg <float> : Average-temperature penalty weight (default: 0)" << std::endl;
@@ -128,6 +130,8 @@ void displayUsage(const char* programName) {
   std::cout << "  --thermal_htc <float> : Heat-transfer coefficient" << std::endl;
   std::cout << "  --thermal_use_mock    : Use deterministic mock thermal surrogate" << std::endl;
   std::cout << "  --thermal_dump_instances <dir> : Dump thermal instance JSON files" << std::endl;
+  std::cout << "  --thermal_dump_manifest <path> : Append thermal instance manifest JSONL" << std::endl;
+  std::cout << "  --thermal_dump_prefix <name> : Prefix for dumped instance IDs/files" << std::endl;
   std::cout << "  --thermal_cache       : Cache repeated thermal surrogate results" << std::endl;
   std::cout << "  --thermal_python <path> : Python executable for DeepOHeat inference" << std::endl;
   std::cout << "  --thermal_inference_script <path> : DeepOHeat adapter script path" << std::endl;
@@ -243,7 +247,9 @@ bool isOptionWithValue(const std::string& option) {
          option == "--generations" ||
          option == "--population" ||
          option == "--max-partitions" ||
+         option == "--thermal_backend" ||
          option == "--thermal_model_path" ||
+         option == "--thermal_model_config" ||
          option == "--thermal_budget" ||
          option == "--thermal_lambda_peak" ||
          option == "--thermal_lambda_avg" ||
@@ -253,6 +259,10 @@ bool isOptionWithValue(const std::string& option) {
          option == "--thermal_ambient" ||
          option == "--thermal_htc" ||
          option == "--thermal_dump_instances" ||
+         option == "--thermal_dump_manifest" ||
+         option == "--thermal_dump_prefix" ||
+         option == "--thermal_dump_split" ||
+         option == "--thermal_source_testcase" ||
          option == "--thermal_inference_script" ||
          option == "--thermal_python";
 }
@@ -292,8 +302,14 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   config.allow_thermal_fallback = hasFlag(argc, argv, "--thermal_allow_fallback");
 
   std::string value;
+  if (getArgValue(argc, argv, "--thermal_backend", value)) {
+    config.thermal_backend = value;
+  }
   if (getArgValue(argc, argv, "--thermal_model_path", value)) {
     config.thermal_model_path = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_model_config", value)) {
+    config.thermal_model_config = value;
   }
   if (getArgValue(argc, argv, "--thermal_budget", value)) {
     config.thermal_budget = safeStof(value, "thermal_budget");
@@ -321,6 +337,18 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   }
   if (getArgValue(argc, argv, "--thermal_dump_instances", value)) {
     config.thermal_dump_instances = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_dump_manifest", value)) {
+    config.thermal_dump_manifest = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_dump_prefix", value)) {
+    config.thermal_dump_prefix = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_dump_split", value)) {
+    config.thermal_dump_split = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_source_testcase", value)) {
+    config.thermal_source_testcase = value;
   }
   if (getArgValue(argc, argv, "--thermal_inference_script", value)) {
     config.thermal_inference_script = value;
@@ -608,7 +636,10 @@ int main(int argc, char *argv[]) {
     chiplet_part->SetThermalConfig(thermal_config);
     if (thermal_config.enable_thermal) {
       Console::Info("[THERMAL] Enabled thermal-aware objective");
-      Console::Info("[THERMAL] budget=" + std::to_string(thermal_config.thermal_budget) +
+      Console::Info("[THERMAL] backend=" +
+                    (thermal_config.use_mock_thermal_model ? std::string("mock")
+                                                            : thermal_config.thermal_backend) +
+                    " budget=" + std::to_string(thermal_config.thermal_budget) +
                     " lambda_peak=" + std::to_string(thermal_config.lambda_peak) +
                     " lambda_avg=" + std::to_string(thermal_config.lambda_avg));
     }

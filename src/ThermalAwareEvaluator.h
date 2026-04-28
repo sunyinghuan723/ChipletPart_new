@@ -26,15 +26,23 @@ struct ThermalChipletInfo {
 };
 
 struct ThermalInstance {
+  std::string schema_version = "chipletpart.thermal_instance.v2";
+  std::string instance_id;
+  std::string source_testcase;
   int grid_x = 0;
   int grid_y = 0;
   double package_width_mm = 0.0;
   double package_height_mm = 0.0;
   double ambient_temperature = 0.0;
   double heat_transfer_coefficient = 0.0;
+  double cost_objective = 0.0;
+  bool has_cost_objective = false;
   double total_power_before_raster = 0.0;
   double total_power_after_raster = 0.0;
   double raster_power_error = 0.0;
+  std::vector<int> partition;
+  std::vector<std::string> technology_assignment;
+  std::vector<std::string> channel_names;
   std::vector<ThermalChipletInfo> chiplets;
   std::vector<double> package_domain;
   std::vector<double> chiplet_footprint;

@@ -26,6 +26,11 @@ score and does not instantiate the thermal encoder or surrogate.
   surrogate interface, mock surrogate, Python DeepOHeat adapter, and cache.
 - `DeepOHeat/scripts/infer_package.py`: Python adapter from ChipletPart package
   JSON to the existing DeepOHeat 2D power-map DeepONet checkpoint.
+- `DeepOHeat/package_thermal/`: package-level surrogate that consumes the full
+  multi-channel package tensor and predicts a temperature field.
+- `tools/thermal/collect_instances.py`: quick batch thermal instance collection.
+- `tools/thermal/reference_solver.py`: simplified deterministic label generator.
+- `tools/thermal/validate_instance.py`: schema checker for dumped instances.
 - `src/test/test_thermal_mvp.cpp`: smoke test for disabled regression, mock
   objective, instance dump, cache, and failure behavior.
 
@@ -62,6 +67,9 @@ energy-per-bit fields.
   normalized and resampled to the 21x21 branch sensor used by the pretrained
   `2d_power_map` checkpoint. Geometry/material/boundary channels are preserved
   in the JSON for future retraining but are not yet consumed by that checkpoint.
+- The `package_thermal` backend consumes the full channel tensor and is the
+  intended research path. It is currently trained from the simplified reference
+  solver labels described in `docs/thermal_dataset_format.md`.
 - The C++ DeepOHeat integration uses a subprocess. The interface is isolated so
   it can be replaced later with a persistent server, ONNX, LibTorch, or batched
   inference.
@@ -133,7 +141,7 @@ Thermal logs are grep-friendly and start with `[THERMAL]`.
 
 ## DeepOHeat Adapter Mode
 
-The existing local DeepOHeat environment can be called through the adapter:
+The legacy compatibility backend uses the original 2D power-map checkpoint:
 
 ```bash
 cd ChipletPart/build
@@ -158,6 +166,74 @@ cd ChipletPart/build
 `--thermal_dump_instances` is required for non-mock inference because the C++
 adapter passes the dumped JSON path to Python.
 
+## Package Thermal Backend
+
+Collect a small dataset:
+
+```bash
+cd ChipletPart
+python3 tools/thermal/collect_instances.py \
+  --chipletpart_build build \
+  --testcase test_data/48_1_14_4_1600_1600 \
+  --out_dir /tmp/chipletpart_thermal_dataset/raw \
+  --num_instances 20 \
+  --seeds 1 2 3 \
+  --grid_x 32 --grid_y 32
+```
+
+Generate labels:
+
+```bash
+../../DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tools/thermal/reference_solver.py \
+  --manifest /tmp/chipletpart_thermal_dataset/raw/manifest.jsonl \
+  --out_dir /tmp/chipletpart_thermal_dataset/labels
+```
+
+Train and evaluate:
+
+```bash
+cd ChipletPart/build
+../../DeepOHeat/.conda/deepoheat-py38/bin/python \
+  ../../DeepOHeat/package_thermal/train.py \
+  --manifest /tmp/chipletpart_thermal_dataset/manifest_labeled.jsonl \
+  --out_dir /tmp/deepoheat_package_run \
+  --epochs 5 --batch_size 2 \
+  --grid_x 32 --grid_y 32 \
+  --device cpu
+
+../../DeepOHeat/.conda/deepoheat-py38/bin/python \
+  ../../DeepOHeat/package_thermal/evaluate.py \
+  --manifest /tmp/chipletpart_thermal_dataset/manifest_labeled.jsonl \
+  --checkpoint /tmp/deepoheat_package_run/checkpoint_best.pt \
+  --device cpu
+```
+
+Run ChipletPart with the package surrogate:
+
+```bash
+./bin/chipletPart <partition_file> \
+  ../test_data/48_1_14_4_1600_1600/io_definitions.xml \
+  ../test_data/48_1_14_4_1600_1600/layer_definitions.xml \
+  ../test_data/48_1_14_4_1600_1600/wafer_process_definitions.xml \
+  ../test_data/48_1_14_4_1600_1600/assembly_process_definitions.xml \
+  ../test_data/48_1_14_4_1600_1600/test_definitions.xml \
+  ../test_data/48_1_14_4_1600_1600/block_level_netlist.xml \
+  ../test_data/48_1_14_4_1600_1600/block_definitions.txt \
+  0.50 0.25 14nm \
+  --enable_thermal \
+  --thermal_backend package_thermal \
+  --thermal_model_path /tmp/deepoheat_package_run/checkpoint_best.pt \
+  --thermal_python ../../DeepOHeat/.conda/deepoheat-py38/bin/python \
+  --thermal_inference_script ../../DeepOHeat/package_thermal/infer_package.py \
+  --thermal_dump_instances /tmp/chipletpart_package_eval \
+  --thermal_budget 330 --thermal_lambda_peak 0.001
+```
+
+`--thermal_use_mock` remains supported and takes precedence as a compatibility
+shortcut; otherwise `--thermal_backend` selects `legacy_2d_power_map` or
+`package_thermal`.
+
 ## Environment Observed On This Server
 
 - CMake: `3.26.5`
@@ -173,7 +249,7 @@ adapter passes the dumped JSON path to Python.
 ## TODO
 
 - Train or fine-tune a DeepOHeat package-level surrogate on the full
-  multi-channel package tensor instead of adapting the 2D power-map checkpoint.
+  multi-channel package tensor with larger and stronger reference labels.
 - Replace subprocess inference with batched or persistent inference for large
   GA/BO runs.
 - Plumb exact IO power directly from the cost-model result if that becomes a
