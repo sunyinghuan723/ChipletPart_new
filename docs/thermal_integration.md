@@ -30,7 +30,11 @@ score and does not instantiate the thermal encoder or surrogate.
   multi-channel package tensor and predicts a temperature field.
 - `tools/thermal/collect_instances.py`: quick batch thermal instance collection.
 - `tools/thermal/reference_solver.py`: simplified deterministic label generator.
+- `tools/thermal/split_manifest.py`: reproducible train/val/test split tool.
+- `tools/thermal/summarize_labels.py`: label distribution and convergence report.
+- `tools/thermal/plot_instance.py` and `plot_prediction.py`: non-GUI debug plots.
 - `tools/thermal/validate_instance.py`: schema checker for dumped instances.
+- `experiments/thermal_partitioning/`: pilot and paper-scale experiment scripts.
 - `src/test/test_thermal_mvp.cpp`: smoke test for disabled regression, mock
   objective, instance dump, cache, and failure behavior.
 
@@ -70,6 +74,8 @@ energy-per-bit fields.
 - The `package_thermal` backend consumes the full channel tensor and is the
   intended research path. It is currently trained from the simplified reference
   solver labels described in `docs/thermal_dataset_format.md`.
+- `legacy_2d_power_map` remains available only as a compatibility/debug
+  baseline. It is not the final paper path.
 - The C++ DeepOHeat integration uses a subprocess. The interface is isolated so
   it can be replaced later with a persistent server, ONNX, LibTorch, or batched
   inference.
@@ -200,13 +206,13 @@ cd ChipletPart/build
   --out_dir /tmp/deepoheat_package_run \
   --epochs 5 --batch_size 2 \
   --grid_x 32 --grid_y 32 \
-  --device cpu
+  --device auto
 
 ../../DeepOHeat/.conda/deepoheat-py38/bin/python \
   ../../DeepOHeat/package_thermal/evaluate.py \
   --manifest /tmp/chipletpart_thermal_dataset/manifest_labeled.jsonl \
   --checkpoint /tmp/deepoheat_package_run/checkpoint_best.pt \
-  --device cpu
+  --device auto
 ```
 
 Run ChipletPart with the package surrogate:
@@ -227,12 +233,38 @@ Run ChipletPart with the package surrogate:
   --thermal_python ../../DeepOHeat/.conda/deepoheat-py38/bin/python \
   --thermal_inference_script ../../DeepOHeat/package_thermal/infer_package.py \
   --thermal_dump_instances /tmp/chipletpart_package_eval \
-  --thermal_budget 330 --thermal_lambda_peak 0.001
+  --thermal_budget 330 --thermal_lambda_peak 0.001 \
+  --thermal_device auto
 ```
 
 `--thermal_use_mock` remains supported and takes precedence as a compatibility
 shortcut; otherwise `--thermal_backend` selects `legacy_2d_power_map` or
 `package_thermal`.
+
+## Device Selection
+
+Package-level train/evaluate/inference scripts accept:
+
+- `--device cpu`
+- `--device cuda`
+- `--device cuda:0`
+- `--device cuda:1`
+- `--device auto`
+
+`auto` chooses `cuda:0` when PyTorch can initialize CUDA, otherwise CPU with a
+clear warning. Explicit CUDA requests fail clearly if the requested device is
+not visible; they do not silently fall back.
+
+ChipletPart passes this through with `--thermal_device`, for example:
+
+```bash
+--thermal_backend package_thermal \
+--thermal_device cuda:0
+```
+
+On the current server, `nvidia-smi` cannot communicate with the NVIDIA driver
+and PyTorch reports `torch.cuda.is_available() == False`, so experiment V1 used
+CPU fallback even though the code paths support GPUs.
 
 ## Environment Observed On This Server
 
@@ -242,17 +274,21 @@ shortcut; otherwise `--thermal_backend` selects `legacy_2d_power_map` or
 - DeepOHeat env Python: `3.8.16`
 - PyTorch: `2.0.0+cu117`
 - NumPy: `1.24.3`
-- CUDA available to PyTorch: `False`
+- CUDA available to PyTorch: `False` in this shell because the NVIDIA driver is
+  not reachable.
 - `nvcc` and bare `conda` were not on `PATH`; the existing DeepOHeat env Python
   was used directly.
 
 ## TODO
 
-- Train or fine-tune a DeepOHeat package-level surrogate on the full
-  multi-channel package tensor with larger and stronger reference labels.
+- Train or fine-tune a DeepOHeat package-level surrogate on larger and stronger
+  reference labels.
 - Replace subprocess inference with batched or persistent inference for large
   GA/BO runs.
 - Plumb exact IO power directly from the cost-model result if that becomes a
   public API, rather than mirroring the signal-power calculation.
 - Add optional dump of the final/best candidate's thermal field once the
   surrogate returns a spatial temperature field.
+- Improve the training data collection helper so it samples real
+  IO-feasible/search candidates rather than the current quick shelf floorplan
+  generator.

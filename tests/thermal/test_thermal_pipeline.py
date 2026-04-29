@@ -20,6 +20,9 @@ sys.path.insert(0, str(CHIPLET_ROOT / "tools" / "thermal"))
 sys.path.insert(0, str(DEEPOHEAT_ROOT / "package_thermal"))
 
 import reference_solver  # noqa: E402
+import split_manifest  # noqa: E402
+import summarize_labels  # noqa: E402
+from device import resolve_device  # noqa: E402
 from dataset import PackageThermalDataset  # noqa: E402
 from model import PackageThermalDeepONet  # noqa: E402
 
@@ -89,6 +92,14 @@ def make_instance(power: np.ndarray, path: Path) -> dict:
 
 
 class ThermalPipelineTests(unittest.TestCase):
+    def test_device_parser(self) -> None:
+        self.assertEqual(str(resolve_device("cpu")), "cpu")
+        auto = resolve_device("auto")
+        self.assertIn(str(auto), {"cpu", "cuda:0"})
+        if torch.cuda.is_available():
+            self.assertEqual(str(resolve_device("cuda")), "cuda:0")
+            self.assertEqual(str(resolve_device("cuda:0")), "cuda:0")
+
     def test_reference_solver_zero_power(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data = make_instance(np.zeros((8, 8), dtype=np.float32), Path(tmp) / "zero.json")
@@ -139,12 +150,136 @@ class ThermalPipelineTests(unittest.TestCase):
             self.assertEqual(tuple(sample["x"].shape), (len(CHANNELS), 8, 8))
             self.assertEqual(tuple(sample["temperature"].shape), (8, 8))
 
+    def test_manifest_split_and_label_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            records = []
+            for i in range(10):
+                instance_path = tmp_path / f"inst_{i}.json"
+                data = make_instance(np.ones((8, 8), dtype=np.float32) * (i + 1), instance_path)
+                label_path = tmp_path / f"label_{i}.npz"
+                np.savez_compressed(
+                    label_path,
+                    temperature_map=np.ones((8, 8), dtype=np.float32) * (300 + i),
+                    t_max=np.asarray(300 + i, dtype=np.float32),
+                    t_avg=np.asarray(300 + i, dtype=np.float32),
+                    residual=np.asarray(1.0e-6, dtype=np.float32),
+                    solver_status=np.asarray("converged"),
+                )
+                records.append(
+                    {
+                        "instance_id": data["instance_id"],
+                        "json_path": str(instance_path),
+                        "label_path": str(label_path),
+                        "testcase": "unit",
+                        "total_power": float(i + 1),
+                        "t_max": float(300 + i),
+                        "t_avg": float(300 + i),
+                        "residual": 1.0e-6,
+                        "solver_status": "converged",
+                    }
+                )
+            manifest = tmp_path / "manifest_labeled.jsonl"
+            manifest.write_text(
+                "".join(json.dumps(record) + "\n" for record in records),
+                encoding="utf-8",
+            )
+            split_records = split_manifest.split_records(
+                records,
+                train_ratio=0.6,
+                val_ratio=0.2,
+                test_ratio=0.2,
+                seed=7,
+            )
+            self.assertEqual(len(split_records), 10)
+            self.assertTrue(all(record.get("split") for record in split_records))
+            summary = summarize_labels.summarize(records)
+            self.assertEqual(summary["num_labels"], 10)
+            self.assertEqual(summary["non_converged_labels"], 0)
+
     def test_package_surrogate_forward(self) -> None:
         model = PackageThermalDeepONet(len(CHANNELS), feature_dim=16, hidden_dim=32)
         x = torch.randn(2, len(CHANNELS), 8, 8)
         coords = torch.rand(64, 2)
         out = model(x, coords)
         self.assertEqual(tuple(out.shape), (2, 64))
+        if torch.cuda.is_available():
+            device = resolve_device("cuda:0")
+            model = PackageThermalDeepONet(len(CHANNELS), feature_dim=16, hidden_dim=32).to(device)
+            out = model(x.to(device), coords.to(device))
+            self.assertEqual(tuple(out.shape), (2, 64))
+
+    def test_training_and_visualization_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            manifest = tmp_path / "manifest.jsonl"
+            records = []
+            for i, split in enumerate(["train", "train", "val"]):
+                instance_path = tmp_path / f"train_inst_{i}.json"
+                data = make_instance(np.ones((8, 8), dtype=np.float32) * (i + 1), instance_path)
+                label_path = tmp_path / f"train_label_{i}.npz"
+                np.savez_compressed(
+                    label_path,
+                    temperature_map=np.ones((8, 8), dtype=np.float32) * (300 + i),
+                    t_max=np.asarray(300 + i, dtype=np.float32),
+                    t_avg=np.asarray(300 + i, dtype=np.float32),
+                )
+                records.append(
+                    {
+                        "instance_id": data["instance_id"],
+                        "json_path": str(instance_path),
+                        "label_path": str(label_path),
+                        "split": split,
+                    }
+                )
+            manifest.write_text(
+                "".join(json.dumps(record) + "\n" for record in records),
+                encoding="utf-8",
+            )
+            train_script = DEEPOHEAT_ROOT / "package_thermal" / "train.py"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(train_script),
+                    "--manifest",
+                    str(manifest),
+                    "--out_dir",
+                    str(tmp_path / "run"),
+                    "--epochs",
+                    "1",
+                    "--batch_size",
+                    "1",
+                    "--grid_x",
+                    "8",
+                    "--grid_y",
+                    "8",
+                    "--device",
+                    "cpu",
+                    "--branch_dim",
+                    "8",
+                    "--trunk_dim",
+                    "8",
+                    "--hidden_dim",
+                    "16",
+                    "--early_stop_patience",
+                    "0",
+                ],
+                check=True,
+            )
+            self.assertTrue((tmp_path / "run" / "checkpoint_best.pt").exists())
+            plot_script = CHIPLET_ROOT / "tools" / "thermal" / "plot_instance.py"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(plot_script),
+                    "--instance",
+                    str(tmp_path / "train_inst_0.json"),
+                    "--out_dir",
+                    str(tmp_path / "figs"),
+                ],
+                check=True,
+            )
+            self.assertTrue((tmp_path / "figs" / "train_inst_0_power_density.png").exists())
 
     def test_package_infer_script(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,6 +321,7 @@ class ThermalPipelineTests(unittest.TestCase):
             result = json.loads(output.read_text(encoding="utf-8"))
             self.assertIn("t_max", result)
             self.assertIn("t_avg", result)
+            self.assertEqual(result["device"], "cpu")
 
             missing = subprocess.run(
                 [

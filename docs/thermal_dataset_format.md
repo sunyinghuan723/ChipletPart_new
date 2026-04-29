@@ -39,8 +39,11 @@ Each line is one JSON object:
 ```json
 {
   "instance_id": "thermal_instance_s1_0_...",
+  "instance_hash": "sha256...",
   "json_path": "/tmp/.../thermal_instance.json",
   "testcase": "48_1_14_4_1600_1600",
+  "grid_x": 32,
+  "grid_y": 32,
   "num_chiplets": 4,
   "technology_assignment": ["7nm", "14nm"],
   "cost": 0.0,
@@ -50,8 +53,12 @@ Each line is one JSON object:
 }
 ```
 
-After running the reference solver, `label_path`, `t_max`, and `t_avg` are
-filled in `manifest_labeled.jsonl`.
+After running the reference solver, `label_path`, `t_max`, `t_avg`, `residual`,
+and `solver_status` are filled in `manifest_labeled.jsonl`.
+
+`collect_instances.py` computes `instance_hash` from partition, technology
+assignment, chiplet boxes, and the power map. Duplicate hashes are skipped in
+the merged manifest.
 
 ## Validation
 
@@ -70,7 +77,35 @@ Labels are NPZ files with:
 - `temperature_map`: `grid_y x grid_x` float map in Kelvin.
 - `t_max`, `t_avg`.
 - `solver_status`, `solver_runtime_sec`, `iterations`, `residual`.
+- `method`, `convergence_tol`, `max_iter`, `valid_label`.
 
 The current reference solver is a simplified deterministic 2D effective
 heat-spreading model. It is intended for surrogate development and can be
 replaced by HotSpot, 3D-ICE, Celsius, commercial FEM, or measured data later.
+
+Useful commands:
+
+```bash
+python3 tools/thermal/reference_solver.py \
+  --manifest /tmp/chipletpart_thermal_dataset_v2/raw/manifest.jsonl \
+  --out_dir /tmp/chipletpart_thermal_dataset_v2/labels \
+  --manifest_out /tmp/chipletpart_thermal_dataset_v2/manifest_labeled.jsonl \
+  --method auto --max_iter 5000 --tol 1e-6 --overwrite
+
+python3 tools/thermal/split_manifest.py \
+  --manifest /tmp/chipletpart_thermal_dataset_v2/manifest_labeled.jsonl \
+  --out_dir /tmp/chipletpart_thermal_dataset_v2 \
+  --train_ratio 0.7 --val_ratio 0.15 --test_ratio 0.15 --seed 2026
+
+python3 tools/thermal/summarize_labels.py \
+  --manifest /tmp/chipletpart_thermal_dataset_v2/manifest_labeled.jsonl \
+  --out_json /tmp/chipletpart_thermal_dataset_v2/label_summary.json \
+  --out_md /tmp/chipletpart_thermal_dataset_v2/label_summary.md
+```
+
+Dataset v2 pilot summary:
+
+- raw/labeled instances: 230
+- split: train 161, val 34, test 35
+- `T_max`: min 317.04 K, mean 358.91 K, max 395.03 K
+- solver status: 230 converged, 0 invalid labels

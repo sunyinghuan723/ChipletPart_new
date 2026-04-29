@@ -674,6 +674,9 @@ ThermalResult PythonDeepOHeatAdapter::Predict(const ThermalInstance&,
   if (!config_.thermal_model_config.empty()) {
     cmd << " --config " << ShellQuote(config_.thermal_model_config);
   }
+  if (!config_.thermal_device.empty()) {
+    cmd << " --device " << ShellQuote(config_.thermal_device);
+  }
 
   const int status = std::system(cmd.str().c_str());
   if (status != 0) {

@@ -1,14 +1,17 @@
 # Package Thermal Surrogate Mini Demo
 
-This report records the small end-to-end smoke experiment used to validate the
-package-level thermal surrogate flow. It is not a paper-scale experiment.
+This report records the first small end-to-end smoke experiment used to validate
+the package-level thermal surrogate flow. It is kept for regression context; the
+newer pilot dataset and experiment V1 are documented in
+`docs/thermal_experiment_v1_report.md`.
 
 ## Environment
 
 - Testcase: `48_1_14_4_1600_1600`
 - Dataset size: 20 instances
 - Grid: `32 x 32`
-- Device: CPU
+- Device: CPU in this run; current scripts also support `--device auto`,
+  `cuda`, `cuda:0`, and `cuda:1`.
 - DeepOHeat env: `DeepOHeat/.conda/deepoheat-py38`
 
 ## Commands

@@ -28,4 +28,5 @@ set -euo pipefail
   --thermal_lambda_avg "${LAMBDA_AVG:-0}" \
   --thermal_grid_x "${GRID_X:-32}" \
   --thermal_grid_y "${GRID_Y:-32}" \
-  --thermal_dump_instances "${OUT_DIR:-/tmp/chipletpart_thermal_package}"
+  --thermal_dump_instances "${OUT_DIR:-/tmp/chipletpart_thermal_package}" \
+  --thermal_device "${THERMAL_DEVICE:-auto}"

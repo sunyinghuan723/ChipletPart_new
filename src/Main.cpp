@@ -134,6 +134,7 @@ void displayUsage(const char* programName) {
   std::cout << "  --thermal_dump_prefix <name> : Prefix for dumped instance IDs/files" << std::endl;
   std::cout << "  --thermal_cache       : Cache repeated thermal surrogate results" << std::endl;
   std::cout << "  --thermal_python <path> : Python executable for DeepOHeat inference" << std::endl;
+  std::cout << "  --thermal_device <cpu|cuda|cuda:0|cuda:1|auto> : Device for Python thermal inference" << std::endl;
   std::cout << "  --thermal_inference_script <path> : DeepOHeat adapter script path" << std::endl;
   std::cout << "  --thermal_allow_fallback : Fall back to cost-only if thermal inference fails" << std::endl;
   std::cout << "Examples:" << std::endl;
@@ -264,6 +265,7 @@ bool isOptionWithValue(const std::string& option) {
          option == "--thermal_dump_split" ||
          option == "--thermal_source_testcase" ||
          option == "--thermal_inference_script" ||
+         option == "--thermal_device" ||
          option == "--thermal_python";
 }
 
@@ -355,6 +357,9 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   }
   if (getArgValue(argc, argv, "--thermal_python", value)) {
     config.python_executable = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_device", value)) {
+    config.thermal_device = value;
   }
   return config;
 }
@@ -641,7 +646,8 @@ int main(int argc, char *argv[]) {
                                                             : thermal_config.thermal_backend) +
                     " budget=" + std::to_string(thermal_config.thermal_budget) +
                     " lambda_peak=" + std::to_string(thermal_config.lambda_peak) +
-                    " lambda_avg=" + std::to_string(thermal_config.lambda_avg));
+                    " lambda_avg=" + std::to_string(thermal_config.lambda_avg) +
+                    " device=" + thermal_config.thermal_device);
     }
     
     // Technology enumeration mode
