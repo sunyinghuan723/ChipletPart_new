@@ -26,10 +26,10 @@ thermal-aware pipeline to a paper-scale experimental pipeline. The next work is
 not more toy integration, but more reliable data, training, experiment
 automation, revalidation, and paper-quality figures/tables.
 
-Most recent milestone rechecked GPU/device availability and hardened package
-thermal device-policy tests. The next milestone should improve dataset
-collection so sampled thermal instances better reflect real ChipletPart search
-candidates.
+Most recent milestone added Dataset Collection V3 provenance metadata and a
+focused smoke from the real ChipletPart search-candidate dump path. The next
+milestone should create a small provenance-aware Dataset V3 pilot across a few
+seeds/benchmarks, label it, summarize it, and split it for surrogate work.
 
 ## Confirmed Decisions
 
@@ -195,7 +195,8 @@ From handoff summary and existing docs:
 - Added `docs/thermal_experiment_v1_report.md`.
 - Updated thermal integration, dataset, mini-demo, package thermal, and
   experiment README docs.
-- Expanded `tests/thermal/test_thermal_pipeline.py` to 9 tests.
+- Expanded `tests/thermal/test_thermal_pipeline.py`; it now has 11 tests after
+  device-policy and Dataset V3 provenance coverage.
 
 ### Device Environment Confirmation
 
@@ -211,11 +212,92 @@ Current checked state on 2026-04-29:
 - Short package thermal smoke with `--device cuda:0` passed for training,
   evaluation, and inference. All outputs recorded actual device `cuda:0` and
   GPU name `NVIDIA GeForce RTX 4090`.
-- `tests/thermal/test_thermal_pipeline.py` now includes 10 tests and covers the
-  mocked CUDA-unavailable policy: explicit CUDA requests fail, while `auto`
-  falls back to CPU and records CPU metadata.
+- `tests/thermal/test_thermal_pipeline.py` covers the mocked
+  CUDA-unavailable policy: explicit CUDA requests fail, while `auto` falls back
+  to CPU and records CPU metadata.
+
+### Dataset Collection V3 Provenance
+
+Collection audit result on 2026-04-29:
+
+- `tools/thermal/collect_instances.py` primarily drives
+  `thermal_collect_cli`.
+- `thermal_collect_cli` creates randomized partitions, randomized technology
+  assignments, and shelf-style helper floorplans before calling the same
+  `ThermalAwareEvaluator` encoder.
+- Therefore the previous dataset collection path is best described as
+  synthetic/helper-generated, not a systematic record of real ChipletPart
+  search trajectories.
+- Real ChipletPart candidate evaluation can already dump thermal instances when
+  `--enable_thermal`, `--thermal_dump_instances`, and
+  `--thermal_dump_manifest` are used. Dataset V3 now makes that path easier to
+  identify by recording candidate provenance.
+
+New metadata/schema behavior:
+
+- Thermal instance JSON and manifest entries now include `run_id`, `benchmark`,
+  `seed`, `candidate_index`, `candidate_source`, `search_stage`, grid size,
+  `technology_assignment_summary`, cost when available, `thermal_enabled`,
+  `floorplan_feasible`, `io_feasible`, `instance_hash`, and
+  `generation_time_unix_sec`.
+- Instance JSON also contains a nested `provenance` object with the same
+  candidate-source metadata for debug inspection.
+- Old instances/manifests without these fields remain valid. Python collection
+  summaries report missing source/stage as `unknown`.
+- `tools/thermal/collect_instances.py` writes `manifest_summary.json` with
+  raw/unique counts, duplicate/skipped counts, counts by `candidate_source`,
+  counts by `search_stage`, grid-size counts, split counts, and label presence.
+- `run_experiment_v1.py` now passes explicit search-candidate provenance into
+  ChipletPart dumps.
 
 ## Recent Validation
+
+Dataset Collection V3 validation on 2026-04-29:
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 11 tests in 4.795 seconds.
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: build passed and `thermal_mvp_test` passed. The build emitted the
+pre-existing Eigen `initParallel()` deprecation warning.
+
+Real search-candidate smoke:
+
+- Output directory: `/tmp/chipletpart_thermal_dataset_v3_smoke/search`
+- Command shape: `build/bin/chipletPart ... --tech-enum --max-partitions 2
+  --enable_thermal --thermal_use_mock --thermal_dump_instances ...
+  --thermal_dump_manifest ... --thermal_candidate_source chipletpart_search
+  --thermal_search_stage search_candidate`
+- Result: 8 dumped instances and 8 valid JSON files.
+- Manifest provenance: `candidate_source=chipletpart_search`,
+  `search_stage=search_candidate`, `run_id=v3_search_seed7`, `seed=7`,
+  grid `16x16`.
+- Reference labels: `tools/thermal/reference_solver.py --method auto
+  --max_iter 1000 --tol 1e-6 --overwrite` passed; all 8 labels were valid.
+- Labeled summary:
+  `/tmp/chipletpart_thermal_dataset_v3_smoke/search/summary_labeled.json`
+  reports raw `8`, unique `8`, labels exist `true`, invalid/skipped `0`, and
+  count by source/stage/grid as `chipletpart_search` /
+  `search_candidate` / `16x16`.
+
+Helper collection smoke:
+
+- Output directory: `/tmp/chipletpart_thermal_dataset_v3_smoke/helper`
+- Command shape: `tools/thermal/collect_instances.py --num_instances 5 ...`
+- Result:
+  `/tmp/chipletpart_thermal_dataset_v3_smoke/helper/manifest_summary.json`
+  reports raw `5`, unique `5`, labels exist `false`,
+  `candidate_source=synthetic_helper`, `search_stage=synthetic_random_shelf`,
+  grid `16x16`, invalid/skipped `0`.
 
 Device verification on 2026-04-29 in
 `/home/yhsun/Chiplet-Partitioning/ChipletPart`:
@@ -312,6 +394,7 @@ before relying on it after new code changes.
 - Dataset V2: `/tmp/chipletpart_thermal_dataset_v2`
 - Surrogate V2: `/tmp/deepoheat_package_run_v2`
 - Experiment V1: `/tmp/chipletpart_thermal_experiments_v1`
+- Dataset V3 smoke: `/tmp/chipletpart_thermal_dataset_v3_smoke`
 
 ## Recent Experiment Results
 
@@ -369,7 +452,9 @@ Revalidation:
 1. GPU is currently available in the checked shell/Python environment, but this
    remains environment-sensitive. Recheck before long training or GPU sweeps.
 2. Reference solver is too simplified for final conclusions.
-3. Training data is not representative enough of full search.
+3. Dataset V3 provenance distinguishes helper-generated samples from real
+   ChipletPart search-candidate dumps, but the latest smoke is only 8 real
+   search-candidate instances and is not a representative training dataset.
 4. Surrogate error remains large on final candidates.
 5. Subprocess inference is usable but not ideal for large sweeps.
 6. Paper-scale experiments are still missing.
@@ -394,12 +479,13 @@ Revalidation:
 
 ## Next Suggested Steps
 
-1. Make dataset collection draw more directly from real ChipletPart search
-   candidate distributions.
-2. Improve reference label generation or add a calibrated external solver path.
-3. Train a larger package-level surrogate once labels and device are reliable.
-4. Run budget sweeps and lambda ablations with final-candidate revalidation.
-5. Generate paper-oriented tables and figures from CSV/JSON outputs.
+1. Generate a small provenance-aware Dataset V3 pilot from real ChipletPart
+   search-candidate dumps across a few seeds/benchmarks.
+2. Label, summarize, and split that Dataset V3 pilot.
+3. Use the summary to decide whether to retrain a small package surrogate next
+   or first improve/calibrate reference labels.
+4. Improve reference label generation or add a calibrated external solver path.
+5. Run budget sweeps and lambda ablations with final-candidate revalidation.
 6. Recheck GPU state before any long training/evaluation run.
 
 ## New Session Checklist

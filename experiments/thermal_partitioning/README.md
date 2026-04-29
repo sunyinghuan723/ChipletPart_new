@@ -68,3 +68,52 @@ python experiments/thermal_partitioning/make_figures.py \
 
 The V1 pilot is not a paper-scale result. It verifies reproducible CSV/JSON/MD
 outputs, final candidate revalidation, and visualization generation.
+
+## Dataset V3 Search-Candidate Smoke
+
+Use this before scaling dataset collection. It exercises the real ChipletPart
+candidate-evaluation dump path with mock thermal inference, records provenance
+metadata, and keeps the run small.
+
+```bash
+cd ChipletPart
+rm -rf /tmp/chipletpart_thermal_dataset_v3_smoke
+mkdir -p /tmp/chipletpart_thermal_dataset_v3_smoke/search
+
+build/bin/chipletPart \
+  test_data/48_1_14_4_1600_1600/io_definitions.xml \
+  test_data/48_1_14_4_1600_1600/layer_definitions.xml \
+  test_data/48_1_14_4_1600_1600/wafer_process_definitions.xml \
+  test_data/48_1_14_4_1600_1600/assembly_process_definitions.xml \
+  test_data/48_1_14_4_1600_1600/test_definitions.xml \
+  test_data/48_1_14_4_1600_1600/block_level_netlist.xml \
+  test_data/48_1_14_4_1600_1600/block_definitions.txt \
+  0.5 0.25 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 --seed 7 \
+  --enable_thermal --thermal_use_mock --thermal_backend mock \
+  --thermal_budget 1000000000 --thermal_lambda_peak 0 \
+  --thermal_grid_x 16 --thermal_grid_y 16 \
+  --thermal_dump_instances /tmp/chipletpart_thermal_dataset_v3_smoke/search/instances \
+  --thermal_dump_manifest /tmp/chipletpart_thermal_dataset_v3_smoke/search/manifest.jsonl \
+  --thermal_dump_prefix v3_search_seed7 \
+  --thermal_dump_split v3_smoke \
+  --thermal_source_testcase 48_1_14_4_1600_1600 \
+  --thermal_run_id v3_search_seed7 \
+  --thermal_candidate_source chipletpart_search \
+  --thermal_search_stage search_candidate \
+  --thermal_seed 7 \
+  --thermal_cache
+
+python3 tools/thermal/validate_instance.py \
+  /tmp/chipletpart_thermal_dataset_v3_smoke/search/instances/*.json
+
+../DeepOHeat/.conda/deepoheat-py38/bin/python tools/thermal/reference_solver.py \
+  --manifest /tmp/chipletpart_thermal_dataset_v3_smoke/search/manifest.jsonl \
+  --out_dir /tmp/chipletpart_thermal_dataset_v3_smoke/search/labels \
+  --manifest_out /tmp/chipletpart_thermal_dataset_v3_smoke/search/manifest_labeled.jsonl \
+  --method auto --max_iter 1000 --tol 1e-6 --overwrite
+```
+
+Expected smoke scale: about 5-30 dumped instances. A successful run should show
+manifest counts by `candidate_source`, `search_stage`, grid size, and label
+presence in the generated summary.

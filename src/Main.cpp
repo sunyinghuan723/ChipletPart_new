@@ -132,6 +132,10 @@ void displayUsage(const char* programName) {
   std::cout << "  --thermal_dump_instances <dir> : Dump thermal instance JSON files" << std::endl;
   std::cout << "  --thermal_dump_manifest <path> : Append thermal instance manifest JSONL" << std::endl;
   std::cout << "  --thermal_dump_prefix <name> : Prefix for dumped instance IDs/files" << std::endl;
+  std::cout << "  --thermal_run_id <id> : Run identifier recorded in dumped instance provenance" << std::endl;
+  std::cout << "  --thermal_candidate_source <source> : Candidate source recorded in provenance" << std::endl;
+  std::cout << "  --thermal_search_stage <stage> : Search stage recorded in provenance" << std::endl;
+  std::cout << "  --thermal_seed <seed> : Seed recorded in dumped instance provenance" << std::endl;
   std::cout << "  --thermal_cache       : Cache repeated thermal surrogate results" << std::endl;
   std::cout << "  --thermal_python <path> : Python executable for DeepOHeat inference" << std::endl;
   std::cout << "  --thermal_device <cpu|cuda|cuda:0|cuda:1|auto> : Device for Python thermal inference" << std::endl;
@@ -264,6 +268,10 @@ bool isOptionWithValue(const std::string& option) {
          option == "--thermal_dump_prefix" ||
          option == "--thermal_dump_split" ||
          option == "--thermal_source_testcase" ||
+         option == "--thermal_run_id" ||
+         option == "--thermal_candidate_source" ||
+         option == "--thermal_search_stage" ||
+         option == "--thermal_seed" ||
          option == "--thermal_inference_script" ||
          option == "--thermal_device" ||
          option == "--thermal_python";
@@ -352,6 +360,20 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   if (getArgValue(argc, argv, "--thermal_source_testcase", value)) {
     config.thermal_source_testcase = value;
   }
+  if (getArgValue(argc, argv, "--thermal_run_id", value)) {
+    config.thermal_run_id = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_candidate_source", value)) {
+    config.thermal_candidate_source = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_search_stage", value)) {
+    config.thermal_search_stage = value;
+  }
+  if (getArgValue(argc, argv, "--thermal_seed", value)) {
+    config.thermal_seed = value;
+  } else if (getArgValue(argc, argv, "--seed", value)) {
+    config.thermal_seed = value;
+  }
   if (getArgValue(argc, argv, "--thermal_inference_script", value)) {
     config.thermal_inference_script = value;
   }
@@ -360,6 +382,14 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   }
   if (getArgValue(argc, argv, "--thermal_device", value)) {
     config.thermal_device = value;
+  }
+  if (!config.thermal_dump_instances.empty()) {
+    if (config.thermal_candidate_source.empty()) {
+      config.thermal_candidate_source = "chipletpart_search";
+    }
+    if (config.thermal_search_stage.empty()) {
+      config.thermal_search_stage = "search_candidate";
+    }
   }
   return config;
 }

@@ -108,7 +108,8 @@ void Usage(const char* argv0) {
             << " --out_dir <dir> --manifest <manifest.jsonl>"
             << " [--num_instances N] [--seed S] [--grid_x X] [--grid_y Y]"
             << " [--source_testcase name] [--tech_nodes 7nm,14nm]"
-            << " [--max_chiplets N] [--prefix name]\n";
+            << " [--max_chiplets N] [--prefix name] [--run_id id]"
+            << " [--candidate_source source] [--search_stage stage]\n";
 }
 
 } // namespace
@@ -135,6 +136,12 @@ int main(int argc, char** argv) {
         GetArg(argc, argv, "--source_testcase",
                fs::path(blocks_file).parent_path().filename().string());
     const std::string prefix = GetArg(argc, argv, "--prefix", "thermal_instance");
+    const std::string run_id =
+        GetArg(argc, argv, "--run_id", prefix + "_seed" + std::to_string(seed));
+    const std::string candidate_source =
+        GetArg(argc, argv, "--candidate_source", "synthetic_helper");
+    const std::string search_stage =
+        GetArg(argc, argv, "--search_stage", "synthetic_random_shelf");
     const std::vector<std::string> tech_nodes =
         SplitCsv(GetArg(argc, argv, "--tech_nodes", "14nm"));
 
@@ -149,6 +156,10 @@ int main(int argc, char** argv) {
     config.thermal_dump_prefix = prefix;
     config.thermal_source_testcase = source_testcase;
     config.thermal_dump_split = "unlabeled";
+    config.thermal_run_id = run_id;
+    config.thermal_candidate_source = candidate_source;
+    config.thermal_search_stage = search_stage;
+    config.thermal_seed = std::to_string(seed);
     config.thermal_budget = 1.0e9;
     config.lambda_peak = 0.0;
 

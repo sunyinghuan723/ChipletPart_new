@@ -23,6 +23,7 @@ sys.path.insert(0, str(DEEPOHEAT_ROOT / "package_thermal"))
 import reference_solver  # noqa: E402
 import split_manifest  # noqa: E402
 import summarize_labels  # noqa: E402
+import collect_instances  # noqa: E402
 from device import device_metadata, resolve_device  # noqa: E402
 from dataset import PackageThermalDataset  # noqa: E402
 from model import PackageThermalDeepONet  # noqa: E402
@@ -218,6 +219,56 @@ class ThermalPipelineTests(unittest.TestCase):
             summary = summarize_labels.summarize(records)
             self.assertEqual(summary["num_labels"], 10)
             self.assertEqual(summary["non_converged_labels"], 0)
+
+    def test_collection_provenance_summary_compatibility(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            old_instance = tmp_path / "old_inst.json"
+            make_instance(np.ones((8, 8), dtype=np.float32), old_instance)
+            old_record = collect_instances.augment_record(
+                {"instance_id": "old_inst", "json_path": str(old_instance)}
+            )
+            self.assertEqual(old_record["candidate_source"], "unknown")
+            self.assertEqual(old_record["search_stage"], "unknown")
+            self.assertIn("instance_hash", old_record)
+
+            new_instance = tmp_path / "new_inst.json"
+            new_data = make_instance(np.ones((8, 8), dtype=np.float32) * 2, new_instance)
+            new_data.update(
+                {
+                    "run_id": "v3_smoke_seed7",
+                    "seed": "7",
+                    "candidate_index": 3,
+                    "candidate_source": "chipletpart_search",
+                    "search_stage": "search_candidate",
+                    "thermal_enabled": True,
+                    "floorplan_feasible": True,
+                    "io_feasible": True,
+                    "generation_time_unix_sec": 123456,
+                    "technology_assignment_summary": {"14nm": 1},
+                }
+            )
+            new_instance.write_text(json.dumps(new_data), encoding="utf-8")
+            new_record = collect_instances.augment_record(
+                {"instance_id": "new_inst", "json_path": str(new_instance)}
+            )
+            self.assertEqual(new_record["candidate_source"], "chipletpart_search")
+            self.assertEqual(new_record["search_stage"], "search_candidate")
+            self.assertEqual(new_record["candidate_index"], 3)
+            self.assertTrue(new_record["floorplan_feasible"])
+
+            summary = collect_instances.summarize_records(
+                [old_record, new_record],
+                raw_instance_count=3,
+                skipped_duplicate_count=1,
+            )
+            self.assertEqual(summary["raw_instance_count"], 3)
+            self.assertEqual(summary["unique_instance_count"], 2)
+            self.assertEqual(summary["skipped_duplicate_count"], 1)
+            self.assertEqual(summary["count_by_candidate_source"]["unknown"], 1)
+            self.assertEqual(summary["count_by_candidate_source"]["chipletpart_search"], 1)
+            self.assertEqual(summary["count_by_search_stage"]["search_candidate"], 1)
+            self.assertEqual(summary["count_by_search_stage"]["unknown"], 1)
 
     def test_package_surrogate_forward(self) -> None:
         model = PackageThermalDeepONet(len(CHANNELS), feature_dim=16, hidden_dim=32)

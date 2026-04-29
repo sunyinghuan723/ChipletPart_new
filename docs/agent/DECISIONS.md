@@ -150,3 +150,24 @@ methodology, or experiment-policy decision is made.
 - Consequences: Keep commits narrow. Do not stage unrelated user modifications.
 - Validation / follow-up: Final responses should include commit hash, validation
   run, and any uncommitted changes left behind.
+
+## ADR-0011: Require Provenance For Paper-Scale Thermal Datasets
+
+- Date: 2026-04-29
+- Decision: Paper-scale thermal datasets should record search-candidate
+  provenance in instance JSON and manifest entries.
+- Status: Accepted
+- Context: Earlier dataset collection could generate package thermal instances
+  through a helper that randomized partitions, technology assignments, and a
+  shelf-style floorplan. That is useful for smoke tests, but paper experiments
+  need to distinguish helper-generated samples from real ChipletPart candidate
+  evaluations and final solutions.
+- Alternatives considered: Infer provenance from directory names after the
+  fact, or leave provenance only in run logs.
+- Consequences: Thermal dumps and manifests should carry fields such as
+  `run_id`, `seed`, `candidate_index`, `candidate_source`, `search_stage`,
+  feasibility flags, grid size, technology summary, and an instance hash. Older
+  records without these fields remain compatible and summarize as `unknown`.
+- Validation / follow-up: Dataset collection summaries must include counts by
+  `candidate_source` and `search_stage`; future Dataset V3 runs should prefer
+  `candidate_source=chipletpart_search` for training/evaluation data.

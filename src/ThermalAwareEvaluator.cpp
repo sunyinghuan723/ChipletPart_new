@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -70,6 +71,29 @@ void WriteStringArray(std::ostream& os, const std::vector<std::string>& values) 
   os << "]";
 }
 
+void WriteStringCountsObject(std::ostream& os,
+                             const std::vector<std::string>& values) {
+  std::map<std::string, int> counts;
+  for (const auto& value : values) {
+    counts[value] += 1;
+  }
+  os << "{";
+  size_t index = 0;
+  for (const auto& [value, count] : counts) {
+    if (index++ > 0) {
+      os << ",";
+    }
+    os << "\"" << JsonEscape(value) << "\":" << count;
+  }
+  os << "}";
+}
+
+long long UnixTimeSeconds() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
 int NumPartitions(const std::vector<int>& partition) {
   int num_partitions = 0;
   for (int part_id : partition) {
@@ -96,8 +120,13 @@ std::string PathStemOrUnknown(const std::string& path) {
 }
 
 std::string ShortHash(const std::string& text) {
+  uint64_t hash = 1469598103934665603ULL;
+  for (unsigned char c : text) {
+    hash ^= static_cast<uint64_t>(c);
+    hash *= 1099511628211ULL;
+  }
   std::ostringstream os;
-  os << std::hex << std::hash<std::string>{}(text);
+  os << std::hex << hash;
   return os.str();
 }
 
@@ -412,6 +441,13 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
   const std::string instance_id =
       instance.instance_id.empty() ? config_.thermal_dump_prefix + "_" + ShortHash(key)
                                    : instance.instance_id;
+  const std::string instance_hash =
+      instance.instance_hash.empty() ? ShortHash(key) : instance.instance_hash;
+  const std::string candidate_source =
+      instance.candidate_source.empty() ? "unknown" : instance.candidate_source;
+  const std::string search_stage =
+      instance.search_stage.empty() ? "unknown" : instance.search_stage;
+  const long long generation_time_unix_sec = UnixTimeSeconds();
   const std::string file_name = instance_id + ".json";
   const std::filesystem::path path = std::filesystem::path(dump_dir) / file_name;
   std::ofstream os(path);
@@ -425,9 +461,60 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
   os << "  \"schema_version\": \"" << JsonEscape(instance.schema_version) << "\",\n";
   os << "  \"instance_id\": \"" << JsonEscape(instance_id) << "\",\n";
   os << "  \"source_testcase\": \"" << JsonEscape(instance.source_testcase) << "\",\n";
+  os << "  \"run_id\": \"" << JsonEscape(instance.run_id) << "\",\n";
+  os << "  \"benchmark\": \"" << JsonEscape(instance.source_testcase) << "\",\n";
+  os << "  \"seed\": \"" << JsonEscape(instance.seed) << "\",\n";
+  os << "  \"candidate_index\": ";
+  if (instance.candidate_index >= 0) {
+    os << instance.candidate_index;
+  } else {
+    os << "null";
+  }
+  os << ",\n";
+  os << "  \"candidate_source\": \"" << JsonEscape(candidate_source) << "\",\n";
+  os << "  \"search_stage\": \"" << JsonEscape(search_stage) << "\",\n";
+  os << "  \"thermal_enabled\": " << (instance.thermal_enabled ? "true" : "false") << ",\n";
+  os << "  \"floorplan_feasible\": "
+     << (instance.floorplan_feasible ? "true" : "false") << ",\n";
+  os << "  \"io_feasible\": " << (instance.io_feasible ? "true" : "false") << ",\n";
+  os << "  \"instance_hash\": \"" << JsonEscape(instance_hash) << "\",\n";
+  os << "  \"generation_time_unix_sec\": " << generation_time_unix_sec << ",\n";
   os << "  \"units\": {\n";
   os << "    \"length\": \"mm\", \"area\": \"mm^2\", \"power\": \"cost_model_power\",";
   os << " \"power_density\": \"cost_model_power/mm^2\", \"temperature\": \"K\"\n";
+  os << "  },\n";
+  os << "  \"provenance\": {\n";
+  os << "    \"run_id\": \"" << JsonEscape(instance.run_id) << "\",\n";
+  os << "    \"benchmark\": \"" << JsonEscape(instance.source_testcase) << "\",\n";
+  os << "    \"testcase\": \"" << JsonEscape(instance.source_testcase) << "\",\n";
+  os << "    \"seed\": \"" << JsonEscape(instance.seed) << "\",\n";
+  os << "    \"candidate_index\": ";
+  if (instance.candidate_index >= 0) {
+    os << instance.candidate_index;
+  } else {
+    os << "null";
+  }
+  os << ",\n";
+  os << "    \"candidate_source\": \"" << JsonEscape(candidate_source) << "\",\n";
+  os << "    \"search_stage\": \"" << JsonEscape(search_stage) << "\",\n";
+  os << "    \"num_chiplets\": " << instance.chiplets.size() << ",\n";
+  os << "    \"technology_assignment_summary\": ";
+  WriteStringCountsObject(os, instance.technology_assignment);
+  os << ",\n";
+  os << "    \"cost\": ";
+  if (instance.has_cost_objective) {
+    os << instance.cost_objective;
+  } else {
+    os << "null";
+  }
+  os << ",\n";
+  os << "    \"thermal_enabled\": " << (instance.thermal_enabled ? "true" : "false")
+     << ",\n";
+  os << "    \"floorplan_feasible\": "
+     << (instance.floorplan_feasible ? "true" : "false") << ",\n";
+  os << "    \"io_feasible\": " << (instance.io_feasible ? "true" : "false") << ",\n";
+  os << "    \"instance_hash\": \"" << JsonEscape(instance_hash) << "\",\n";
+  os << "    \"generation_time_unix_sec\": " << generation_time_unix_sec << "\n";
   os << "  },\n";
   os << "  \"grid\": {\"x\": " << instance.grid_x << ", \"y\": " << instance.grid_y
      << ", \"z\": " << config_.grid_z << "},\n";
@@ -455,6 +542,9 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
   os << ",\n";
   os << "  \"technology_assignment\": ";
   WriteStringArray(os, instance.technology_assignment);
+  os << ",\n";
+  os << "  \"technology_assignment_summary\": ";
+  WriteStringCountsObject(os, instance.technology_assignment);
   os << ",\n";
   os << "  \"rasterization\": {\"total_power_before_raster\": "
      << instance.total_power_before_raster << ", \"total_power_after_raster\": "
@@ -515,11 +605,27 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
     double total_power = instance.total_power_before_raster;
     manifest << "{"
              << "\"instance_id\":\"" << JsonEscape(instance_id) << "\","
+             << "\"instance_hash\":\"" << JsonEscape(instance_hash) << "\","
              << "\"json_path\":\"" << JsonEscape(path.string()) << "\","
              << "\"testcase\":\"" << JsonEscape(instance.source_testcase) << "\","
+             << "\"benchmark\":\"" << JsonEscape(instance.source_testcase) << "\","
+             << "\"grid_x\":" << instance.grid_x << ","
+             << "\"grid_y\":" << instance.grid_y << ","
+             << "\"run_id\":\"" << JsonEscape(instance.run_id) << "\","
+             << "\"seed\":\"" << JsonEscape(instance.seed) << "\","
+             << "\"candidate_index\":";
+    if (instance.candidate_index >= 0) {
+      manifest << instance.candidate_index;
+    } else {
+      manifest << "null";
+    }
+    manifest << ",\"candidate_source\":\"" << JsonEscape(candidate_source) << "\","
+             << "\"search_stage\":\"" << JsonEscape(search_stage) << "\","
              << "\"num_chiplets\":" << instance.chiplets.size() << ","
              << "\"technology_assignment\":";
     WriteStringArray(manifest, instance.technology_assignment);
+    manifest << ",\"technology_assignment_summary\":";
+    WriteStringCountsObject(manifest, instance.technology_assignment);
     manifest << ",\"cost\":";
     if (instance.has_cost_objective) {
       manifest << instance.cost_objective;
@@ -527,6 +633,13 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
       manifest << "null";
     }
     manifest << ",\"total_power\":" << total_power
+             << ",\"thermal_enabled\":"
+             << (instance.thermal_enabled ? "true" : "false")
+             << ",\"floorplan_feasible\":"
+             << (instance.floorplan_feasible ? "true" : "false")
+             << ",\"io_feasible\":"
+             << (instance.io_feasible ? "true" : "false")
+             << ",\"generation_time_unix_sec\":" << generation_time_unix_sec
              << ",\"label_path\":\"\","
              << "\"split\":\"" << JsonEscape(config_.thermal_dump_split) << "\""
              << "}\n";
@@ -847,6 +960,19 @@ ThermalEvaluation ThermalAwareEvaluator::Evaluate(
       if (instance.source_testcase.empty()) {
         instance.source_testcase = PathStemOrUnknown(blocks_file_);
       }
+      instance.run_id = config_.thermal_run_id;
+      instance.candidate_source = config_.thermal_candidate_source.empty()
+                                      ? "unknown"
+                                      : config_.thermal_candidate_source;
+      instance.search_stage = config_.thermal_search_stage.empty()
+                                  ? "unknown"
+                                  : config_.thermal_search_stage;
+      instance.seed = config_.thermal_seed;
+      instance.candidate_index = static_cast<int>(next_candidate_index_++);
+      instance.instance_hash = ShortHash(key);
+      instance.thermal_enabled = config_.enable_thermal;
+      instance.floorplan_feasible = floorplan_success;
+      instance.io_feasible = floorplan_success;
       instance.cost_objective = base_cost;
       instance.has_cost_objective = true;
       const std::string instance_path =

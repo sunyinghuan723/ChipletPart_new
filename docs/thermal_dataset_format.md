@@ -21,6 +21,29 @@ Required top-level fields:
 - `cost_objective`: cost-only value if available, otherwise `null`.
 - `partition`, `technology_assignment`.
 
+Optional provenance fields are emitted by the current ChipletPart thermal dump
+path and are recommended for paper-scale datasets:
+
+- `run_id`: experiment or collection run identifier.
+- `benchmark`: benchmark/testcase alias.
+- `seed`: seed string recorded by the collection run.
+- `candidate_index`: per-run dump index for the evaluated candidate.
+- `candidate_source`: where the candidate came from, for example
+  `chipletpart_search`, `synthetic_helper`, or `final_solution`.
+- `search_stage`: stage label such as `search_candidate`,
+  `synthetic_random_shelf`, or `final_solution`.
+- `thermal_enabled`, `floorplan_feasible`, `io_feasible`.
+- `instance_hash`: stable ChipletPart dump-key hash. The Python collection tool
+  also computes a SHA-256 hash for merged/deduplicated manifests and preserves
+  the ChipletPart hash as `dump_instance_hash`.
+- `generation_time_unix_sec`.
+- `technology_assignment_summary`: count by technology node.
+- `provenance`: nested copy of the same candidate-source metadata for
+  debug-friendly inspection.
+
+Older instances that do not contain these provenance fields remain valid; tools
+fall back to `unknown` source/stage values when summarizing them.
+
 Required channels:
 
 - Geometry: `package_domain`, `chiplet_footprint`, `chiplet_boundary`.
@@ -42,12 +65,23 @@ Each line is one JSON object:
   "instance_hash": "sha256...",
   "json_path": "/tmp/.../thermal_instance.json",
   "testcase": "48_1_14_4_1600_1600",
+  "benchmark": "48_1_14_4_1600_1600",
+  "run_id": "v3_search_seed7",
+  "seed": "7",
+  "candidate_index": 0,
+  "candidate_source": "chipletpart_search",
+  "search_stage": "search_candidate",
   "grid_x": 32,
   "grid_y": 32,
   "num_chiplets": 4,
   "technology_assignment": ["7nm", "14nm"],
+  "technology_assignment_summary": {"7nm": 1, "14nm": 1},
   "cost": 0.0,
   "total_power": 123.4,
+  "thermal_enabled": true,
+  "floorplan_feasible": true,
+  "io_feasible": true,
+  "generation_time_unix_sec": 1777476761,
   "label_path": "",
   "split": "train"
 }
@@ -60,6 +94,10 @@ and `solver_status` are filled in `manifest_labeled.jsonl`.
 assignment, chiplet boxes, and the power map. Duplicate hashes are skipped in
 the merged manifest.
 
+`collect_instances.py` writes `manifest_summary.json` with raw/unique counts,
+duplicate/invalid counts, counts by `candidate_source`, counts by
+`search_stage`, counts by grid size, split counts, and label-presence status.
+
 ## Validation
 
 ```bash
@@ -69,6 +107,48 @@ python3 tools/thermal/validate_instance.py /tmp/chipletpart_thermal_dataset/raw/
 
 The validator checks schema fields, required channels, array sizes, chiplet
 metadata, and rasterized power conservation.
+
+## Dataset V3 Search-Candidate Smoke
+
+The recommended small smoke for provenance-aware search-candidate dumps uses
+real `chipletPart` candidate evaluation with mock thermal inference so it does
+not require a trained surrogate:
+
+```bash
+rm -rf /tmp/chipletpart_thermal_dataset_v3_smoke
+mkdir -p /tmp/chipletpart_thermal_dataset_v3_smoke/search
+
+build/bin/chipletPart \
+  test_data/48_1_14_4_1600_1600/io_definitions.xml \
+  test_data/48_1_14_4_1600_1600/layer_definitions.xml \
+  test_data/48_1_14_4_1600_1600/wafer_process_definitions.xml \
+  test_data/48_1_14_4_1600_1600/assembly_process_definitions.xml \
+  test_data/48_1_14_4_1600_1600/test_definitions.xml \
+  test_data/48_1_14_4_1600_1600/block_level_netlist.xml \
+  test_data/48_1_14_4_1600_1600/block_definitions.txt \
+  0.5 0.25 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 --seed 7 \
+  --enable_thermal --thermal_use_mock --thermal_backend mock \
+  --thermal_budget 1000000000 --thermal_lambda_peak 0 \
+  --thermal_grid_x 16 --thermal_grid_y 16 \
+  --thermal_dump_instances /tmp/chipletpart_thermal_dataset_v3_smoke/search/instances \
+  --thermal_dump_manifest /tmp/chipletpart_thermal_dataset_v3_smoke/search/manifest.jsonl \
+  --thermal_dump_prefix v3_search_seed7 \
+  --thermal_dump_split v3_smoke \
+  --thermal_source_testcase 48_1_14_4_1600_1600 \
+  --thermal_run_id v3_search_seed7 \
+  --thermal_candidate_source chipletpart_search \
+  --thermal_search_stage search_candidate \
+  --thermal_seed 7 \
+  --thermal_cache
+
+python3 tools/thermal/validate_instance.py \
+  /tmp/chipletpart_thermal_dataset_v3_smoke/search/instances/*.json
+```
+
+For helper-generated smoke data, `collect_instances.py` still uses
+`thermal_collect_cli` and labels records as `candidate_source=synthetic_helper`
+and `search_stage=synthetic_random_shelf` by default.
 
 ## Reference Labels
 

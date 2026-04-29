@@ -29,6 +29,15 @@ struct ThermalInstance {
   std::string schema_version = "chipletpart.thermal_instance.v2";
   std::string instance_id;
   std::string source_testcase;
+  std::string run_id;
+  std::string candidate_source;
+  std::string search_stage;
+  std::string seed;
+  std::string instance_hash;
+  int candidate_index = -1;
+  bool thermal_enabled = false;
+  bool floorplan_feasible = false;
+  bool io_feasible = false;
   int grid_x = 0;
   int grid_y = 0;
   double package_width_mm = 0.0;
@@ -171,6 +180,7 @@ private:
   std::unordered_map<std::string, ThermalResult> result_cache_;
   std::mutex mutex_;
   bool initialized_ = false;
+  size_t next_candidate_index_ = 0;
 };
 
 } // namespace chiplet

@@ -40,9 +40,9 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Prepare dataset collection to better match real ChipletPart search candidate
-distributions, while preserving the current cost-only baseline and package
-thermal device policy.
+Prepare a small Dataset V3 labeling/splitting run from provenance-aware
+ChipletPart search-candidate dumps, then decide whether the next improvement is
+surrogate retraining or reference label quality.
 
 ## Completed Small Tasks
 
@@ -61,17 +61,35 @@ thermal device policy.
 - Hardened Python thermal device tests so explicit CUDA requests fail under a
   mocked CUDA-unavailable environment, while `auto` falls back to CPU and
   records CPU metadata.
+- Audited Dataset V2 collection and confirmed `tools/thermal/collect_instances.py`
+  primarily used `thermal_collect_cli`, which creates synthetic/helper
+  randomized partitions and shelf-style floorplans rather than systematically
+  recording real ChipletPart search trajectories.
+- Added provenance metadata to thermal instance JSON and manifest dumps:
+  `run_id`, `benchmark`, `seed`, `candidate_index`, `candidate_source`,
+  `search_stage`, feasibility flags, technology summary, grid size,
+  `instance_hash`, and generation time.
+- Added `collect_instances.py` manifest summary support for raw/unique counts,
+  duplicate/skipped counts, counts by `candidate_source`, counts by
+  `search_stage`, grid-size distribution, split distribution, and label
+  presence.
+- Ran a small Dataset V3 smoke from the real `chipletPart --tech-enum`
+  candidate-evaluation dump path with mock thermal inference. The smoke wrote 8
+  valid 16x16 search-candidate instances, labeled all 8 with the simplified
+  reference solver, and produced a labeled summary.
 
 ## Next Small Verifiable Task
 
-Make dataset collection closer to the real ChipletPart search distribution:
+Generate a small provenance-aware Dataset V3 pilot, then label and summarize it:
 
-- Inspect `tools/thermal/collect_instances.py` and the current candidate dump
-  path used by `thermal_collect_cli`.
-- Identify the smallest change that samples more realistic GA/search
-  candidates without running a large experiment sweep.
-- Add or update one focused test or smoke command for the new collection path.
-- Update the dataset/agent docs and commit the verified milestone.
+- Use the real ChipletPart search-candidate dump path with
+  `candidate_source=chipletpart_search`.
+- Keep the run small, for example tens of instances across a few seeds and one
+  or two benchmarks.
+- Label with the current simplified reference solver, write manifest summaries,
+  and split into train/val/test.
+- Use the summary to decide whether the following milestone should retrain a
+  small package surrogate or first improve/calibrate reference labels.
 
 ## Recent Validation
 
@@ -155,13 +173,75 @@ Result: passed. Train, evaluation, and inference outputs all recorded
 
 Result: passed, 10 tests in 5.924 seconds.
 
+Dataset Collection V3 validation on 2026-04-29:
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 11 tests in 4.795 seconds.
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: build passed and `thermal_mvp_test` passed. The build emitted the
+pre-existing Eigen `initParallel()` deprecation warning.
+
+Search-candidate smoke output:
+`/tmp/chipletpart_thermal_dataset_v3_smoke/search`.
+
+- Command: `build/bin/chipletPart ... --tech-enum --max-partitions 2
+  --enable_thermal --thermal_use_mock --thermal_dump_manifest ...`
+- Result: 8 dumped instances, 8 valid JSON files, source/stage distribution
+  `chipletpart_search/search_candidate`, grid `16x16`.
+- Reference labels: `tools/thermal/reference_solver.py --method auto
+  --max_iter 1000 --tol 1e-6 --overwrite` passed; all 8 labels were valid.
+- Summary: `summary_labeled.json` reports raw `8`, unique `8`, labels exist
+  `true`, invalid/skipped `0`.
+
+Helper collection smoke output:
+`/tmp/chipletpart_thermal_dataset_v3_smoke/helper`.
+
+- Command: `tools/thermal/collect_instances.py --num_instances 5 ...`
+- Result: `manifest_summary.json` reports raw `5`, unique `5`,
+  `candidate_source=synthetic_helper`, `search_stage=synthetic_random_shelf`,
+  grid `16x16`, labels exist `false`.
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+required = [
+    Path("AGENTS.md"),
+    Path("docs/agent/ACTIVE_PLAN.md"),
+    Path("docs/agent/HANDOFF.md"),
+    Path("docs/agent/DECISIONS.md"),
+]
+missing = [str(p) for p in required if not p.exists()]
+if missing:
+    raise SystemExit("Missing files: " + ", ".join(missing))
+for p in required:
+    text = p.read_text(encoding="utf-8")
+    if len(text.strip()) < 500:
+        raise SystemExit(f"{p} looks too short")
+print("agent handoff files exist and are non-trivial")
+PY
+```
+
+Result: passed on 2026-04-29 in
+`/home/yhsun/Chiplet-Partitioning/ChipletPart`.
+
 ## Current Blockers
 
 - GPU state is currently good in this shell/Python environment, but it remains
   environment-sensitive. Recheck before long training or GPU sweeps.
 - Reference labels are still generated by a simplified 2D effective solver, not
   a signoff-quality thermal solver.
-- Pilot dataset generation is not yet representative enough of the full
+- Dataset V3 provenance now distinguishes helper vs real search-candidate
+  dumps, but the smoke is tiny and not yet representative of the full
   ChipletPart optimizer candidate distribution.
 - Surrogate error on final candidates is still significant and requires
   calibration, larger data, and revalidation.

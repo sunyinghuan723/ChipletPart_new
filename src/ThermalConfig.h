@@ -18,6 +18,10 @@ struct ThermalConfig {
   std::string thermal_dump_prefix = "thermal_instance";
   std::string thermal_dump_split = "unlabeled";
   std::string thermal_source_testcase;
+  std::string thermal_run_id;
+  std::string thermal_candidate_source;
+  std::string thermal_search_stage;
+  std::string thermal_seed;
   std::string thermal_inference_script;
   std::string python_executable = "python3";
   std::string thermal_device = "auto";
