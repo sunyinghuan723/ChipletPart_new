@@ -26,8 +26,10 @@ thermal-aware pipeline to a paper-scale experimental pipeline. The next work is
 not more toy integration, but more reliable data, training, experiment
 automation, revalidation, and paper-quality figures/tables.
 
-This specific milestone creates persistent agent files so future Codex sessions
-can cold-start from repository files instead of the conversation window.
+Most recent milestone rechecked GPU/device availability and hardened package
+thermal device-policy tests. The next milestone should improve dataset
+collection so sampled thermal instances better reflect real ChipletPart search
+candidates.
 
 ## Confirmed Decisions
 
@@ -114,10 +116,13 @@ source /etc/profile.d/site-modules.sh
 module load cuda
 ```
 
-Previous Codex-reported GPU state: the server should have `cuda:0` and
-`cuda:1`, but in the last recorded shell `nvidia-smi` could not communicate
-with the driver and PyTorch reported `torch.cuda.is_available() == False`.
-Always recheck before GPU training/evaluation.
+Current checked GPU state on 2026-04-29: `nvidia-smi` works with driver
+`570.124.06`, reports CUDA `12.8`, and shows two `NVIDIA GeForce RTX 4090`
+GPUs. The DeepOHeat Python environment reports PyTorch `2.0.0+cu117`,
+`torch.cuda.is_available() == True`, `torch.cuda.device_count() == 2`, and both
+devices are `NVIDIA GeForce RTX 4090`. Always recheck before long GPU
+training/evaluation because earlier sessions saw driver/PyTorch CUDA
+unavailable.
 
 ## Completed Content
 
@@ -192,7 +197,64 @@ From handoff summary and existing docs:
   experiment README docs.
 - Expanded `tests/thermal/test_thermal_pipeline.py` to 9 tests.
 
+### Device Environment Confirmation
+
+Current checked state on 2026-04-29:
+
+- `nvidia-smi` passed.
+- NVIDIA driver: `570.124.06`.
+- CUDA version reported by `nvidia-smi`: `12.8`.
+- Visible GPUs: two `NVIDIA GeForce RTX 4090` devices, indices `0` and `1`.
+- DeepOHeat Python: PyTorch `2.0.0+cu117`.
+- PyTorch CUDA availability: `True`.
+- PyTorch CUDA device count: `2`.
+- Short package thermal smoke with `--device cuda:0` passed for training,
+  evaluation, and inference. All outputs recorded actual device `cuda:0` and
+  GPU name `NVIDIA GeForce RTX 4090`.
+- `tests/thermal/test_thermal_pipeline.py` now includes 10 tests and covers the
+  mocked CUDA-unavailable policy: explicit CUDA requests fail, while `auto`
+  falls back to CPU and records CPU metadata.
+
 ## Recent Validation
+
+Device verification on 2026-04-29 in
+`/home/yhsun/Chiplet-Partitioning/ChipletPart`:
+
+```bash
+nvidia-smi
+```
+
+Result: passed. Two `NVIDIA GeForce RTX 4090` GPUs were visible.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python - <<'PY'
+import torch
+print("torch:", torch.__version__)
+print("cuda available:", torch.cuda.is_available())
+print("cuda count:", torch.cuda.device_count())
+for i in range(torch.cuda.device_count()):
+    print(i, torch.cuda.get_device_name(i))
+PY
+```
+
+Result: passed with PyTorch `2.0.0+cu117`, CUDA available `True`, count `2`,
+and devices `0`/`1` both `NVIDIA GeForce RTX 4090`.
+
+Short `--device cuda:0` package thermal smoke:
+
+- Generated a temporary 8x8 manifest.
+- Ran one-epoch `DeepOHeat/package_thermal/train.py`.
+- Ran `DeepOHeat/package_thermal/evaluate.py`.
+- Ran `DeepOHeat/package_thermal/infer_package.py`.
+
+Result: passed. Train/evaluation/inference all recorded `device: cuda:0`.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 10 tests in 5.924 seconds.
 
 This handoff milestone validated the persistent agent files on 2026-04-29:
 
@@ -304,13 +366,16 @@ Revalidation:
 
 ## Unresolved Issues
 
-1. GPU is currently unavailable or unconfirmed.
+1. GPU is currently available in the checked shell/Python environment, but this
+   remains environment-sensitive. Recheck before long training or GPU sweeps.
 2. Reference solver is too simplified for final conclusions.
 3. Training data is not representative enough of full search.
 4. Surrogate error remains large on final candidates.
 5. Subprocess inference is usable but not ideal for large sweeps.
 6. Paper-scale experiments are still missing.
-7. Do not casually add `28nm`; previous Codex-reported runs hit unsupported
+7. Only `cuda:0` received an end-to-end smoke in the latest check. `cuda:1` was
+   visible via PyTorch but not separately smoked.
+8. Do not casually add `28nm`; previous Codex-reported runs hit unsupported
    technology scaling for `45nm -> 28nm`. The pilot uses `7nm,14nm`.
 
 ## Easy-To-Miss Points
@@ -329,13 +394,13 @@ Revalidation:
 
 ## Next Suggested Steps
 
-1. Recheck GPU state and update docs with current device availability.
-2. Make dataset collection draw more directly from real ChipletPart search
+1. Make dataset collection draw more directly from real ChipletPart search
    candidate distributions.
-3. Improve reference label generation or add a calibrated external solver path.
-4. Train a larger package-level surrogate once labels and device are reliable.
-5. Run budget sweeps and lambda ablations with final-candidate revalidation.
-6. Generate paper-oriented tables and figures from CSV/JSON outputs.
+2. Improve reference label generation or add a calibrated external solver path.
+3. Train a larger package-level surrogate once labels and device are reliable.
+4. Run budget sweeps and lambda ablations with final-candidate revalidation.
+5. Generate paper-oriented tables and figures from CSV/JSON outputs.
+6. Recheck GPU state before any long training/evaluation run.
 
 ## New Session Checklist
 

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +23,7 @@ sys.path.insert(0, str(DEEPOHEAT_ROOT / "package_thermal"))
 import reference_solver  # noqa: E402
 import split_manifest  # noqa: E402
 import summarize_labels  # noqa: E402
-from device import resolve_device  # noqa: E402
+from device import device_metadata, resolve_device  # noqa: E402
 from dataset import PackageThermalDataset  # noqa: E402
 from model import PackageThermalDeepONet  # noqa: E402
 
@@ -99,6 +100,27 @@ class ThermalPipelineTests(unittest.TestCase):
         if torch.cuda.is_available():
             self.assertEqual(str(resolve_device("cuda")), "cuda:0")
             self.assertEqual(str(resolve_device("cuda:0")), "cuda:0")
+
+    def test_device_parser_cuda_unavailable_policy(self) -> None:
+        with mock.patch("torch.cuda.is_available", return_value=False), mock.patch(
+            "torch.cuda.device_count", return_value=0
+        ):
+            with self.assertRaisesRegex(RuntimeError, "requested --device cuda"):
+                resolve_device("cuda")
+            with self.assertRaisesRegex(RuntimeError, "requested --device cuda:0"):
+                resolve_device("cuda:0")
+            with self.assertWarnsRegex(RuntimeWarning, "--device auto selected CPU"):
+                auto = resolve_device("auto")
+            self.assertEqual(str(auto), "cpu")
+            self.assertEqual(
+                device_metadata(auto),
+                {
+                    "device": "cpu",
+                    "cuda_available": False,
+                    "cuda_device_count": 0,
+                    "gpu_name": "",
+                },
+            )
 
     def test_reference_solver_zero_power(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
