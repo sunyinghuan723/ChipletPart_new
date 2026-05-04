@@ -24,6 +24,7 @@ import reference_solver  # noqa: E402
 import split_manifest  # noqa: E402
 import summarize_labels  # noqa: E402
 import collect_instances  # noqa: E402
+import collect_search_dataset  # noqa: E402
 from device import device_metadata, resolve_device  # noqa: E402
 from dataset import PackageThermalDataset  # noqa: E402
 from model import PackageThermalDeepONet  # noqa: E402
@@ -269,6 +270,48 @@ class ThermalPipelineTests(unittest.TestCase):
             self.assertEqual(summary["count_by_candidate_source"]["chipletpart_search"], 1)
             self.assertEqual(summary["count_by_search_stage"]["search_candidate"], 1)
             self.assertEqual(summary["count_by_search_stage"]["unknown"], 1)
+
+    def test_search_dataset_manifest_merge_deduplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            instance_a = tmp_path / "search_a.json"
+            data_a = make_instance(np.ones((8, 8), dtype=np.float32), instance_a)
+            data_a.update(
+                {
+                    "run_id": "v3_unit_seed1",
+                    "seed": "1",
+                    "candidate_index": 0,
+                    "candidate_source": "chipletpart_search",
+                    "search_stage": "search_candidate",
+                    "thermal_enabled": True,
+                    "floorplan_feasible": True,
+                    "io_feasible": True,
+                }
+            )
+            instance_a.write_text(json.dumps(data_a), encoding="utf-8")
+
+            instance_b = tmp_path / "search_b.json"
+            data_b = dict(data_a)
+            data_b["instance_id"] = "search_b"
+            data_b["candidate_index"] = 1
+            instance_b.write_text(json.dumps(data_b), encoding="utf-8")
+
+            manifest = tmp_path / "manifest.jsonl"
+            manifest.write_text(
+                json.dumps({"instance_id": "search_a", "json_path": str(instance_a)}) + "\n"
+                + json.dumps({"instance_id": "search_b", "json_path": str(instance_b)}) + "\n",
+                encoding="utf-8",
+            )
+            out_manifest = tmp_path / "merged.jsonl"
+            records, raw_count, skipped = collect_search_dataset.merge_manifests(
+                [manifest], out_manifest
+            )
+            self.assertEqual(raw_count, 2)
+            self.assertEqual(skipped, 1)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["candidate_source"], "chipletpart_search")
+            self.assertEqual(records[0]["search_stage"], "search_candidate")
+            self.assertEqual(collect_search_dataset.validate_records(records), 0)
 
     def test_package_surrogate_forward(self) -> None:
         model = PackageThermalDeepONet(len(CHANNELS), feature_dim=16, hidden_dim=32)

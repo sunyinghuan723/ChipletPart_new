@@ -150,6 +150,51 @@ For helper-generated smoke data, `collect_instances.py` still uses
 `thermal_collect_cli` and labels records as `candidate_source=synthetic_helper`
 and `search_stage=synthetic_random_shelf` by default.
 
+## Dataset V3 Pilot
+
+`tools/thermal/collect_search_dataset.py` collects a small provenance-aware
+pilot from real ChipletPart search-candidate dumps, labels it with the current
+simplified reference solver, writes summaries, and creates train/val/test
+manifest splits.
+
+Example command:
+
+```bash
+cd ChipletPart
+rm -rf /tmp/chipletpart_thermal_dataset_v3_pilot
+
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tools/thermal/collect_search_dataset.py \
+  --chipletpart_build build \
+  --testcase test_data/48_1_14_4_1600_1600 \
+  --out_dir /tmp/chipletpart_thermal_dataset_v3_pilot \
+  --seeds 1 2 3 \
+  --grid_x 16 --grid_y 16 \
+  --tech_nodes 7nm,14nm \
+  --max_partitions 3 \
+  --method auto --max_iter 1000 --tol 1e-6 \
+  --split_seed 2026
+```
+
+Expected outputs include:
+
+- `raw/<benchmark>/seed_*/instances/*.json`
+- `raw/<benchmark>/seed_*/manifest_raw.jsonl`
+- `manifest_raw.jsonl`
+- `labels/*.npz`
+- `manifest_labeled.jsonl`
+- `manifest_summary.json`
+- `label_summary.json`
+- `label_summary.md`
+- `manifest_split.jsonl`
+- `manifest_train.jsonl`, `manifest_val.jsonl`, `manifest_test.jsonl`
+- `RUN_SUMMARY.md`
+
+The pilot command uses `candidate_source=chipletpart_search` and
+`search_stage=search_candidate`. Labels still come from the simplified 2D
+effective reference solver, which remains pilot-only and not signoff ground
+truth.
+
 ## Reference Labels
 
 Labels are NPZ files with:

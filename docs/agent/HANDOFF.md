@@ -26,10 +26,11 @@ thermal-aware pipeline to a paper-scale experimental pipeline. The next work is
 not more toy integration, but more reliable data, training, experiment
 automation, revalidation, and paper-quality figures/tables.
 
-Most recent milestone added Dataset Collection V3 provenance metadata and a
-focused smoke from the real ChipletPart search-candidate dump path. The next
-milestone should create a small provenance-aware Dataset V3 pilot across a few
-seeds/benchmarks, label it, summarize it, and split it for surrogate work.
+Most recent milestone created a small provenance-aware Dataset V3 pilot from
+real ChipletPart search-candidate dumps, labeled it with the simplified
+reference solver, summarized it, and split it for surrogate work. The next
+milestone should either train a small package_thermal surrogate on this pilot
+or decide to improve reference labels first based on the label distribution.
 
 ## Confirmed Decisions
 
@@ -250,7 +251,107 @@ New metadata/schema behavior:
 - `run_experiment_v1.py` now passes explicit search-candidate provenance into
   ChipletPart dumps.
 
+### Dataset V3 Pilot
+
+Output directory:
+`/tmp/chipletpart_thermal_dataset_v3_pilot`.
+
+Collection settings:
+
+- Script: `tools/thermal/collect_search_dataset.py`.
+- Benchmark: `test_data/48_1_14_4_1600_1600`.
+- Seeds: `1 2 3`.
+- Grid: `16x16`.
+- Technology nodes: `7nm,14nm`.
+- Max partitions: `3`.
+- Candidate source: `chipletpart_search`.
+- Search stage: `search_candidate`.
+- Thermal collection mode: `--enable_thermal --thermal_use_mock
+  --thermal_backend mock`, so collection does not depend on a trained
+  surrogate.
+- Reference labels: current simplified 2D effective reference solver with
+  `--method auto --max_iter 1000 --tol 1e-6 --overwrite`. This remains
+  pilot-only and is not signoff ground truth.
+
+Output files:
+
+- `raw/48_1_14_4_1600_1600/seed_*/instances/*.json`
+- `raw/48_1_14_4_1600_1600/seed_*/manifest_raw.jsonl`
+- `manifest_raw.jsonl`
+- `labels/*.npz`
+- `manifest_labeled.jsonl`
+- `manifest_summary.json`
+- `label_summary.json`
+- `label_summary.md`
+- `manifest_split.jsonl`
+- `manifest_train.jsonl`, `manifest_val.jsonl`, `manifest_test.jsonl`
+- `RUN_SUMMARY.md`
+
+Manifest summary:
+
+- Raw candidate dumps before dedup: `48`.
+- Unique records: `30`.
+- Skipped duplicates: `18`.
+- Invalid instances: `0`.
+- Candidate source distribution: `chipletpart_search: 30`.
+- Search stage distribution: `search_candidate: 30`.
+- Grid distribution: `16x16: 30`.
+- Labels exist: `true`.
+
+Label summary:
+
+- Labels: `30`.
+- Solver status: `converged: 30`.
+- Invalid labels: `0`.
+- Non-converged labels: `0`.
+- `T_max`: min `317.0389 K`, mean `324.8712 K`, max `342.5247 K`.
+- `T_avg`: min `308.3147 K`, mean `315.7380 K`, max `327.6581 K`.
+- Total power: min `30.7403`, mean `71.27918`, max `89.163`.
+
+Split summary:
+
+- Train: `21`.
+- Val: `4`.
+- Test: `5`.
+
+This Dataset V3 pilot is useful for pipeline and small-surrogate debugging, but
+it is still single-benchmark and not a final paper-scale dataset.
+
 ## Recent Validation
+
+Dataset V3 pilot validation on 2026-05-04:
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 12 tests in 5.354 seconds.
+
+```bash
+test -x build/bin/chipletPart && echo build/bin/chipletPart exists
+test -x build/bin/thermal_collect_cli && echo build/bin/thermal_collect_cli exists
+```
+
+Result: both binaries exist.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tools/thermal/collect_search_dataset.py \
+  --chipletpart_build build \
+  --testcase test_data/48_1_14_4_1600_1600 \
+  --out_dir /tmp/chipletpart_thermal_dataset_v3_pilot \
+  --seeds 1 2 3 \
+  --grid_x 16 --grid_y 16 \
+  --tech_nodes 7nm,14nm \
+  --max_partitions 3 \
+  --method auto --max_iter 1000 --tol 1e-6 \
+  --num_workers 1 --split_seed 2026
+```
+
+Result: passed. It collected raw `48`, unique `30`, skipped duplicates `18`,
+invalid instances `0`, valid labels `30/30`, and train/val/test split
+`21/4/5`.
 
 Dataset Collection V3 validation on 2026-04-29:
 
@@ -395,6 +496,7 @@ before relying on it after new code changes.
 - Surrogate V2: `/tmp/deepoheat_package_run_v2`
 - Experiment V1: `/tmp/chipletpart_thermal_experiments_v1`
 - Dataset V3 smoke: `/tmp/chipletpart_thermal_dataset_v3_smoke`
+- Dataset V3 pilot: `/tmp/chipletpart_thermal_dataset_v3_pilot`
 
 ## Recent Experiment Results
 
@@ -452,10 +554,11 @@ Revalidation:
 1. GPU is currently available in the checked shell/Python environment, but this
    remains environment-sensitive. Recheck before long training or GPU sweeps.
 2. Reference solver is too simplified for final conclusions.
-3. Dataset V3 provenance distinguishes helper-generated samples from real
-   ChipletPart search-candidate dumps, but the latest smoke is only 8 real
-   search-candidate instances and is not a representative training dataset.
-4. Surrogate error remains large on final candidates.
+3. Dataset V3 pilot is still single-benchmark and small. It is useful for
+   debugging training and evaluation, but not representative enough for final
+   paper claims.
+4. Surrogate error remains large on final candidates and has not yet been
+   retested with Dataset V3 training.
 5. Subprocess inference is usable but not ideal for large sweeps.
 6. Paper-scale experiments are still missing.
 7. Only `cuda:0` received an end-to-end smoke in the latest check. `cuda:1` was
@@ -479,12 +582,15 @@ Revalidation:
 
 ## Next Suggested Steps
 
-1. Generate a small provenance-aware Dataset V3 pilot from real ChipletPart
-   search-candidate dumps across a few seeds/benchmarks.
-2. Label, summarize, and split that Dataset V3 pilot.
-3. Use the summary to decide whether to retrain a small package surrogate next
-   or first improve/calibrate reference labels.
-4. Improve reference label generation or add a calibrated external solver path.
+1. Train a small package_thermal surrogate on
+   `/tmp/chipletpart_thermal_dataset_v3_pilot/manifest_train.jsonl`,
+   validate on `manifest_val.jsonl`, and test on `manifest_test.jsonl`, or
+   decide to improve reference labels first based on the pilot label summary.
+2. Compare Dataset V3 pilot surrogate metrics against the prior Dataset V2
+   surrogate metrics.
+3. Improve reference label generation or add a calibrated external solver path.
+4. Expand Dataset V3 beyond one benchmark only after the small surrogate/label
+   sanity check.
 5. Run budget sweeps and lambda ablations with final-candidate revalidation.
 6. Recheck GPU state before any long training/evaluation run.
 

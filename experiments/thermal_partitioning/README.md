@@ -117,3 +117,32 @@ python3 tools/thermal/validate_instance.py \
 Expected smoke scale: about 5-30 dumped instances. A successful run should show
 manifest counts by `candidate_source`, `search_stage`, grid size, and label
 presence in the generated summary.
+
+## Dataset V3 Pilot
+
+Use the Dataset V3 pilot before training or comparing package surrogates. It
+collects real ChipletPart search-candidate thermal dumps with mock thermal
+inference, labels them with the simplified reference solver, writes summaries,
+and creates train/val/test manifests.
+
+```bash
+cd ChipletPart
+rm -rf /tmp/chipletpart_thermal_dataset_v3_pilot
+
+../DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tools/thermal/collect_search_dataset.py \
+  --chipletpart_build build \
+  --testcase test_data/48_1_14_4_1600_1600 \
+  --out_dir /tmp/chipletpart_thermal_dataset_v3_pilot \
+  --seeds 1 2 3 \
+  --grid_x 16 --grid_y 16 \
+  --tech_nodes 7nm,14nm \
+  --max_partitions 3 \
+  --method auto --max_iter 1000 --tol 1e-6 \
+  --split_seed 2026
+```
+
+The pilot is intentionally small and is not a paper-scale dataset. Check
+`manifest_summary.json`, `label_summary.json`, and `manifest_train/val/test`
+before deciding whether to train a small surrogate or improve reference labels
+first.
