@@ -1,5 +1,7 @@
 #include "ThermalAwareEvaluator.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -37,6 +39,37 @@ double ExtractJsonNumber(const std::string& json, const std::string& key) {
   const size_t end = json.find_first_of(",}\n", pos);
   Require(end != std::string::npos, "malformed JSON value " + key);
   return std::stod(json.substr(pos, end - pos));
+}
+
+std::vector<double> ExtractJsonNumberArray(const std::string& json,
+                                           const std::string& key) {
+  const std::string pattern = "\"" + key + "\":";
+  size_t pos = json.find(pattern);
+  Require(pos != std::string::npos, "missing JSON key " + key);
+  pos = json.find('[', pos);
+  Require(pos != std::string::npos, "malformed JSON array " + key);
+  const size_t end = json.find(']', pos);
+  Require(end != std::string::npos, "malformed JSON array " + key);
+
+  std::vector<double> values;
+  size_t cursor = pos + 1;
+  while (cursor < end) {
+    while (cursor < end &&
+           (std::isspace(static_cast<unsigned char>(json[cursor])) ||
+            json[cursor] == ',')) {
+      ++cursor;
+    }
+    if (cursor >= end) {
+      break;
+    }
+    size_t next = cursor;
+    while (next < end && json[next] != ',') {
+      ++next;
+    }
+    values.push_back(std::stod(json.substr(cursor, next - cursor)));
+    cursor = next + 1;
+  }
+  return values;
 }
 
 fs::path FindFirstJson(const fs::path& dir) {
@@ -118,6 +151,11 @@ int main(int argc, char** argv) {
           "dumped instance missing geometry channel");
   Require(json.find("\"power_density_w_per_mm2\"") != std::string::npos,
           "dumped instance missing power channel");
+  Require(json.find("\"block_rasterization_mode\": \"synthetic_block_treemap\"") !=
+              std::string::npos,
+          "dumped instance missing synthetic block rasterization mode");
+  Require(json.find("\"blocks\"") != std::string::npos,
+          "dumped instance missing packed block metadata");
   Require(json.find("\"silicon_material\"") != std::string::npos,
           "dumped instance missing material channel");
   Require(json.find("\"heat_transfer_coefficient\"") != std::string::npos,
@@ -126,6 +164,12 @@ int main(int argc, char** argv) {
   const double power_error = ExtractJsonNumber(json, "power_error");
   Require(std::abs(power_error) <= std::max(1.0e-3, 0.01 * std::abs(before)),
           "rasterized power is not conserved within tolerance");
+  const auto densities = ExtractJsonNumberArray(json, "power_density_w_per_mm2");
+  Require(!densities.empty(), "power-density array is empty");
+  const auto [min_density, max_density] =
+      std::minmax_element(densities.begin(), densities.end());
+  Require(densities.size() == 64 && *max_density - *min_density > 1.0e-6,
+          "block-level rasterization did not create a nonuniform power map");
 
   chiplet::ThermalConfig high_budget_config = mock_config;
   high_budget_config.thermal_budget = thermal.thermal.t_max + 100.0;

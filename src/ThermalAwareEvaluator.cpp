@@ -289,6 +289,121 @@ double ClampPositive(double value, double fallback) {
   return value > kEpsilon ? value : fallback;
 }
 
+double RectArea(double width, double height) {
+  return ClampPositive(width * height, 1.0);
+}
+
+double SumBlockAreas(const std::vector<ThermalBlockInfo>& blocks,
+                     const std::vector<int>& block_indices,
+                     size_t begin,
+                     size_t end) {
+  double total = 0.0;
+  for (size_t i = begin; i < end; ++i) {
+    total += ClampPositive(blocks[block_indices[i]].area_mm2, 1.0);
+  }
+  return total;
+}
+
+void PackBlocksRecursive(std::vector<ThermalBlockInfo>& blocks,
+                         const std::vector<int>& block_indices,
+                         size_t begin,
+                         size_t end,
+                         double x,
+                         double y,
+                         double width,
+                         double height) {
+  if (begin >= end) {
+    return;
+  }
+  if (end - begin == 1) {
+    auto& block_info = blocks[block_indices[begin]];
+    block_info.x_mm = x;
+    block_info.y_mm = y;
+    block_info.width_mm = width;
+    block_info.height_mm = height;
+    return;
+  }
+
+  const double total_area = SumBlockAreas(blocks, block_indices, begin, end);
+  if (total_area <= kEpsilon) {
+    const size_t mid = begin + (end - begin) / 2;
+    const double ratio =
+        static_cast<double>(mid - begin) / static_cast<double>(end - begin);
+    if (width >= height) {
+      const double left_width = width * ratio;
+      PackBlocksRecursive(blocks, block_indices, begin, mid, x, y, left_width,
+                          height);
+      PackBlocksRecursive(blocks, block_indices, mid, end, x + left_width, y,
+                          width - left_width, height);
+    } else {
+      const double lower_height = height * ratio;
+      PackBlocksRecursive(blocks, block_indices, begin, mid, x, y, width,
+                          lower_height);
+      PackBlocksRecursive(blocks, block_indices, mid, end, x, y + lower_height,
+                          width, height - lower_height);
+    }
+    return;
+  }
+
+  double prefix_area = 0.0;
+  double best_diff = std::numeric_limits<double>::max();
+  size_t split = begin + 1;
+  for (size_t i = begin + 1; i < end; ++i) {
+    prefix_area += ClampPositive(blocks[block_indices[i - 1]].area_mm2, 1.0);
+    const double diff = std::abs(prefix_area - total_area * 0.5);
+    if (diff < best_diff) {
+      best_diff = diff;
+      split = i;
+    }
+  }
+
+  const double left_area = SumBlockAreas(blocks, block_indices, begin, split);
+  const double ratio = std::min(1.0, std::max(0.0, left_area / total_area));
+  if (width >= height) {
+    const double left_width = width * ratio;
+    PackBlocksRecursive(blocks, block_indices, begin, split, x, y, left_width,
+                        height);
+    PackBlocksRecursive(blocks, block_indices, split, end, x + left_width, y,
+                        width - left_width, height);
+  } else {
+    const double lower_height = height * ratio;
+    PackBlocksRecursive(blocks, block_indices, begin, split, x, y, width,
+                        lower_height);
+    PackBlocksRecursive(blocks, block_indices, split, end, x, y + lower_height,
+                        width, height - lower_height);
+  }
+}
+
+void AddRectToRaster(const double rect_x,
+                     const double rect_y,
+                     const double rect_w,
+                     const double rect_h,
+                     const double density,
+                     const double cell_w,
+                     const double cell_h,
+                     const double cell_area,
+                     ThermalInstance& instance) {
+  for (int gy = 0; gy < instance.grid_y; ++gy) {
+    const double cell_y0 = gy * cell_h;
+    const double cell_y1 = cell_y0 + cell_h;
+    for (int gx = 0; gx < instance.grid_x; ++gx) {
+      const double cell_x0 = gx * cell_w;
+      const double cell_x1 = cell_x0 + cell_w;
+      const double ix0 = std::max(cell_x0, rect_x);
+      const double iy0 = std::max(cell_y0, rect_y);
+      const double ix1 = std::min(cell_x1, rect_x + rect_w);
+      const double iy1 = std::min(cell_y1, rect_y + rect_h);
+      if (ix1 <= ix0 || iy1 <= iy0) {
+        continue;
+      }
+      const double overlap_area = (ix1 - ix0) * (iy1 - iy0);
+      const double coverage = overlap_area / cell_area;
+      const int idx = gy * instance.grid_x + gx;
+      instance.power_density[idx] += density * coverage;
+    }
+  }
+}
+
 } // namespace
 
 ThermalInstanceEncoder::ThermalInstanceEncoder(ThermalConfig config)
@@ -395,12 +510,18 @@ ThermalInstance ThermalInstanceEncoder::Encode(
   std::vector<std::string> techs = NormalizeTechArray(tech_assignment, num_partitions);
   std::vector<double> compute_power(num_partitions, 0.0);
   std::vector<double> area(num_partitions, 0.0);
+  std::vector<double> block_area(blocks.size(), 0.0);
+  std::vector<double> block_compute_power(blocks.size(), 0.0);
 
   for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
     const int part_id = partition[block_id];
     const block& b = blocks[block_id];
-    area[part_id] += b.area * SafeAreaScaling(b.tech, techs[part_id], b.is_memory);
-    compute_power[part_id] += b.power * SafePowerScaling(b.tech, techs[part_id]);
+    block_area[block_id] =
+        b.area * SafeAreaScaling(b.tech, techs[part_id], b.is_memory);
+    block_compute_power[block_id] =
+        b.power * SafePowerScaling(b.tech, techs[part_id]);
+    area[part_id] += block_area[block_id];
+    compute_power[part_id] += block_compute_power[block_id];
   }
 
   const std::vector<int>& io_partition_ref =
@@ -484,6 +605,29 @@ ThermalInstance ThermalInstanceEncoder::Encode(
   instance.package_width_mm = ClampPositive(max_x - min_x, 1.0);
   instance.package_height_mm = ClampPositive(max_y - min_y, 1.0);
 
+  instance.blocks.resize(blocks.size());
+  std::vector<std::vector<int>> blocks_by_partition(num_partitions);
+  for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+    const int part_id = partition[block_id];
+    const block& b = blocks[block_id];
+    ThermalBlockInfo block_info;
+    block_info.id = static_cast<int>(block_id);
+    block_info.name = b.name;
+    block_info.chiplet_id = part_id;
+    block_info.source_technology = b.tech;
+    block_info.technology = techs[part_id];
+    block_info.is_memory = b.is_memory;
+    block_info.area_mm2 = ClampPositive(block_area[block_id], 1.0);
+    block_info.compute_power = block_compute_power[block_id];
+    instance.blocks[block_id] = block_info;
+    blocks_by_partition[part_id].push_back(static_cast<int>(block_id));
+  }
+  for (const auto& chiplet : instance.chiplets) {
+    PackBlocksRecursive(instance.blocks, blocks_by_partition[chiplet.id], 0,
+                        blocks_by_partition[chiplet.id].size(), chiplet.x_mm,
+                        chiplet.y_mm, chiplet.width_mm, chiplet.height_mm);
+  }
+
   Rasterize(instance);
   return instance;
 }
@@ -506,7 +650,7 @@ void ThermalInstanceEncoder::Rasterize(ThermalInstance& instance) const {
   const double cell_area = ClampPositive(cell_w * cell_h, 1.0);
 
   for (const auto& chiplet : instance.chiplets) {
-    const double density = chiplet.total_power / ClampPositive(chiplet.area_mm2, 1.0);
+    const double io_density = chiplet.io_power / ClampPositive(chiplet.area_mm2, 1.0);
     for (int gy = 0; gy < instance.grid_y; ++gy) {
       const double cell_y0 = gy * cell_h;
       const double cell_y1 = cell_y0 + cell_h;
@@ -525,13 +669,21 @@ void ThermalInstanceEncoder::Rasterize(ThermalInstance& instance) const {
         const int idx = gy * instance.grid_x + gx;
         instance.chiplet_footprint[idx] =
             std::min(1.0, instance.chiplet_footprint[idx] + coverage);
-        instance.power_density[idx] += density * coverage;
+        instance.power_density[idx] += io_density * coverage;
         instance.silicon_material[idx] = config_.silicon_conductivity;
         if (coverage > 0.0 && coverage < 0.999) {
           instance.chiplet_boundary[idx] = 1.0;
         }
       }
     }
+  }
+
+  for (const auto& block_info : instance.blocks) {
+    const double block_density =
+        block_info.compute_power / RectArea(block_info.width_mm, block_info.height_mm);
+    AddRectToRaster(block_info.x_mm, block_info.y_mm, block_info.width_mm,
+                    block_info.height_mm, block_density, cell_w, cell_h,
+                    cell_area, instance);
   }
 
   instance.total_power_after_raster = 0.0;
@@ -665,10 +817,13 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
   os << "  \"technology_assignment_summary\": ";
   WriteStringCountsObject(os, instance.technology_assignment);
   os << ",\n";
-  os << "  \"rasterization\": {\"total_power_before_raster\": "
+  os << "  \"rasterization\": {\"mode\": \"synthetic_block_treemap\", "
+     << "\"io_power_mode\": \"chiplet_uniform\", "
+     << "\"total_power_before_raster\": "
      << instance.total_power_before_raster << ", \"total_power_after_raster\": "
      << instance.total_power_after_raster << ", \"power_error\": "
      << instance.raster_power_error << "},\n";
+  os << "  \"block_rasterization_mode\": \"synthetic_block_treemap\",\n";
   os << "  \"total_power_before_raster\": " << instance.total_power_before_raster << ",\n";
   os << "  \"total_power_after_raster\": " << instance.total_power_after_raster << ",\n";
   os << "  \"raster_power_error\": " << instance.raster_power_error << ",\n";
@@ -683,6 +838,23 @@ std::string ThermalInstanceEncoder::DumpJson(const ThermalInstance& instance,
        << chiplet.compute_power << ", \"io_power\": " << chiplet.io_power
        << ", \"total_power\": " << chiplet.total_power << "}";
     os << (i + 1 == instance.chiplets.size() ? "\n" : ",\n");
+  }
+  os << "  ],\n";
+  os << "  \"blocks\": [\n";
+  for (size_t i = 0; i < instance.blocks.size(); ++i) {
+    const auto& block_info = instance.blocks[i];
+    os << "    {\"id\": " << block_info.id << ", \"name\": \""
+       << JsonEscape(block_info.name) << "\", \"chiplet_id\": "
+       << block_info.chiplet_id << ", \"source_technology\": \""
+       << JsonEscape(block_info.source_technology)
+       << "\", \"technology\": \"" << JsonEscape(block_info.technology)
+       << "\", \"is_memory\": " << (block_info.is_memory ? "true" : "false")
+       << ", \"x_mm\": " << block_info.x_mm << ", \"y_mm\": "
+       << block_info.y_mm << ", \"width_mm\": " << block_info.width_mm
+       << ", \"height_mm\": " << block_info.height_mm
+       << ", \"area_mm2\": " << block_info.area_mm2
+       << ", \"compute_power\": " << block_info.compute_power << "}";
+    os << (i + 1 == instance.blocks.size() ? "\n" : ",\n");
   }
   os << "  ],\n";
   os << "  \"channels\": {\n";

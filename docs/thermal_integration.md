@@ -47,8 +47,8 @@ The encoder creates a fixed package-aligned grid with JSON metadata:
 - Material: `silicon_material`, `interposer_material`, `tim_material`,
   `package_material`.
 - Boundary conditions: `ambient_temperature`, `heat_transfer_coefficient`.
-- Metadata: units, package size, chiplet boxes, per-chiplet compute/IO/total
-  power, and raster power conservation.
+- Metadata: units, package size, chiplet boxes, synthetic block boxes,
+  per-chiplet compute/IO/total power, and raster power conservation.
 
 Power is computed per chiplet as:
 
@@ -60,6 +60,14 @@ The block compute power uses ChipletPart's existing technology scaling helpers.
 The IO term mirrors the cost model's IO definitions, bandwidth utilization, and
 energy-per-bit fields.
 
+Because the partitioning flow does not expose physical block placement, thermal
+encoding now creates a deterministic synthetic treemap inside each chiplet.
+Every scaled block is assigned a rectangle proportional to its scaled area, and
+its compute power is rasterized over that rectangle. The resulting
+`power_density_w_per_mm2` therefore contains chiplet-internal block-level
+spatial variation. Partition-induced IO power is still a chiplet-level term and
+is spread uniformly over the chiplet footprint.
+
 For GA100, the netlist partition operates on 45 vertices while
 `block_definitions.txt` contains 179 block-level power records. Thermal
 encoding maps those power records onto the netlist vertices first, then expands
@@ -69,8 +77,10 @@ names map directly; `sm_*` records map across `l2_*` vertices; and
 
 ## Current Approximations
 
-- Chiplet-internal block placement is not available in the partitioning flow, so
-  each chiplet's power is uniformly rasterized over its footprint.
+- Chiplet-internal block placement is synthetic, not physical placement from a
+  floorplanner. The current mode is deterministic treemap packing and should be
+  treated as a spatial prior for thermal exploration, not as final block
+  floorplanning.
 - `power_density_w_per_mm2` uses the cost-model power unit divided by mm^2. The
   JSON records this explicitly because the original cost model does not expose a
   separate SI power unit contract.

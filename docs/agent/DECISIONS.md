@@ -195,3 +195,26 @@ methodology, or experiment-policy decision is made.
 - Validation / follow-up: A GA100 `--tech-enum --max-partitions 2` run with the
   pretrained legacy 2D checkpoint completed, wrote 8 thermal result JSON files,
   and every dumped thermal instance had `partition` length 179.
+
+## ADR-0013: Use Synthetic Treemap Packing For Block-Level Power Rasterization
+
+- Date: 2026-05-05
+- Decision: When real block placement is unavailable, pack blocks
+  deterministically inside each chiplet with an area-proportional treemap and
+  rasterize each block's scaled compute power over its own rectangle.
+- Status: Accepted
+- Context: GA100 block-level powers were already mapped into thermal
+  evaluation, but the power map sent to DeepOHeat still used chiplet-level
+  uniform density. This preserved total power but erased chiplet-internal
+  spatial variation from SM, L2, PCIe, HBM controller, and HBM PHY records.
+- Rasterization policy: block compute power uses the same technology scaling as
+  before, block rectangle area follows scaled block area, and IO power remains a
+  chiplet-level term spread uniformly across the chiplet footprint.
+- Consequences: Thermal instance JSON now records packed `blocks` metadata and
+  `block_rasterization_mode=synthetic_block_treemap`. The `power_density_w_per_mm2`
+  channel contains block-level spatial variation while preserving total
+  rasterized power. This is a synthetic spatial prior, not signoff block
+  placement.
+- Validation / follow-up: `thermal_mvp_test` now checks that dumped instances
+  include block packing metadata, conserve raster power, and produce a
+  nonuniform power-density map.

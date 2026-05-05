@@ -25,6 +25,21 @@ struct ThermalChipletInfo {
   double total_power = 0.0;
 };
 
+struct ThermalBlockInfo {
+  int id = 0;
+  std::string name;
+  int chiplet_id = 0;
+  std::string source_technology;
+  std::string technology;
+  bool is_memory = false;
+  double x_mm = 0.0;
+  double y_mm = 0.0;
+  double width_mm = 0.0;
+  double height_mm = 0.0;
+  double area_mm2 = 0.0;
+  double compute_power = 0.0;
+};
+
 struct ThermalInstance {
   std::string schema_version = "chipletpart.thermal_instance.v2";
   std::string instance_id;
@@ -53,6 +68,7 @@ struct ThermalInstance {
   std::vector<std::string> technology_assignment;
   std::vector<std::string> channel_names;
   std::vector<ThermalChipletInfo> chiplets;
+  std::vector<ThermalBlockInfo> blocks;
   std::vector<double> package_domain;
   std::vector<double> chiplet_footprint;
   std::vector<double> chiplet_boundary;

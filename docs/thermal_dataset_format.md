@@ -16,6 +16,8 @@ Required top-level fields:
 - `channel_names`.
 - `channels`: flattened row-major arrays of length `grid_x * grid_y`.
 - `chiplets`: boxes and per-chiplet compute/IO/total power.
+- `blocks`: synthetic block boxes used for block-level power rasterization when
+  `block_rasterization_mode` is `synthetic_block_treemap`.
 - `total_power_before_raster`, `total_power_after_raster`,
   `raster_power_error`.
 - `cost_objective`: cost-only value if available, otherwise `null`.
@@ -52,8 +54,13 @@ Required channels:
   `package_material`.
 - Boundary: `ambient_temperature`, `heat_transfer_coefficient`.
 
-The chiplet-internal power map is currently uniform over each chiplet footprint
-because ChipletPart does not provide block-level placement in this flow.
+ChipletPart does not provide real block placement in this flow, so the encoder
+uses a deterministic synthetic treemap packing inside each chiplet. Each
+scaled block gets a rectangle proportional to its scaled area and its compute
+power is rasterized over that rectangle. Partition-induced IO power remains a
+chiplet-level term and is spread uniformly over the chiplet footprint. The
+thermal JSON records this as `block_rasterization_mode:
+synthetic_block_treemap`.
 
 ## Manifest JSONL
 
@@ -106,7 +113,8 @@ python3 tools/thermal/validate_instance.py /tmp/chipletpart_thermal_dataset/raw/
 ```
 
 The validator checks schema fields, required channels, array sizes, chiplet
-metadata, and rasterized power conservation.
+metadata, packed block metadata when present, and rasterized power
+conservation.
 
 ## Dataset V3 Search-Candidate Smoke
 

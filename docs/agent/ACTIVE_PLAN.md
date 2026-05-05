@@ -40,9 +40,10 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Complete the user-requested GA100 legacy DeepOHeat 2D thermal integration smoke:
-wire `model_epoch_10000.pth` through `run_chiplet_test.sh`, preserve GA100
-block-level power in thermal encoding, and document how to run the flow.
+Complete the user-requested GA100 block-level spatial thermal encoding update:
+preserve GA100 block-level power, synthesize block positions inside chiplets,
+rasterize each block into the DeepOHeat power map, and document how to run and
+inspect the flow.
 
 ## Completed Small Tasks
 
@@ -104,6 +105,11 @@ block-level power in thermal encoding, and document how to run the flow.
   inference. It produced 8 thermal results on `cuda:0`, all dumped instances
   had `partition` length 179, and total candidate power varied with
   technology/IO from about `398` to `502.704`.
+- Added synthetic block treemap packing for thermal rasterization. Each scaled
+  block now receives a deterministic rectangle inside its chiplet and its
+  compute power is rasterized over that rectangle; IO power remains uniformly
+  spread over the chiplet footprint. Thermal dumps record `blocks` metadata and
+  `block_rasterization_mode=synthetic_block_treemap`.
 
 ## Next Small Verifiable Task
 
@@ -120,6 +126,54 @@ first based on the Dataset V3 label summary:
   reference-label/data improvement before larger training.
 
 ## Recent Validation
+
+Synthetic block-level rasterization validation on 2026-05-05:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+```
+
+Result: passed. The build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests in 5.743 seconds.
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_ga100_block_raster_smoke \
+  --thermal-cache
+```
+
+Result: passed. The run evaluated 5 canonical assignments, wrote 8 thermal
+instance JSON files and 8 DeepOHeat result JSON files, used `cuda:0`, reported
+`t_max` from `303.618 K` to `310.698 K`, and selected best cost `35.589993`
+with technology assignment `[7nm, 7nm]`.
+
+```bash
+find /tmp/chipletpart_ga100_block_raster_smoke/instances \
+  -maxdepth 1 -name '*.json' ! -name '*.thermal_result.json' -print0 |
+  xargs -0 python3 tools/thermal/validate_instance.py
+```
+
+Result: passed for all 8 thermal instance JSON files. Additional JSON checks
+confirmed `block_counts=[179]`, `partition_lengths=[179]`,
+`block_rasterization_mode=synthetic_block_treemap`, nonzero power-map spread
+from `0.2175589025` to `1.07823155114`, max raster power error
+`2.44427e-12`, and DeepOHeat result device `cuda:0`.
 
 GA100 legacy 2D thermal integration validation on 2026-05-05:
 

@@ -69,6 +69,23 @@ def validate_instance(path: Path) -> dict:
         ]:
             _require(key in chiplet, f"chiplet missing {key}")
 
+    if data.get("block_rasterization_mode") == "synthetic_block_treemap":
+        _require("blocks" in data and isinstance(data["blocks"], list), "missing packed blocks")
+        _require(len(data["blocks"]) > 0, "packed blocks list is empty")
+        for block in data["blocks"]:
+            for key in [
+                "id",
+                "name",
+                "chiplet_id",
+                "x_mm",
+                "y_mm",
+                "width_mm",
+                "height_mm",
+                "area_mm2",
+                "compute_power",
+            ]:
+                _require(key in block, f"packed block missing {key}")
+
     before = float(
         data.get(
             "total_power_before_raster",
