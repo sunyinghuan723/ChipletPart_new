@@ -110,6 +110,10 @@ inspect the flow.
   compute power is rasterized over that rectangle; IO power remains uniformly
   spread over the chiplet footprint. Thermal dumps record `blocks` metadata and
   `block_rasterization_mode=synthetic_block_treemap`.
+- Added automatic thermal figure generation to `run_chiplet_test.sh --thermal`.
+  After successful runs, field NPZ files are plotted into
+  `<thermal-output-dir>/figures` by default, with `--thermal-figure-dir` as an
+  override.
 
 ## Next Small Verifiable Task
 
@@ -126,6 +130,55 @@ first based on the Dataset V3 label summary:
   reference-label/data improvement before larger training.
 
 ## Recent Validation
+
+Thermal figure post-processing validation on 2026-05-05:
+
+```bash
+bash -n run_chiplet_test.sh
+```
+
+Result: passed.
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test -j 4
+```
+
+Result: passed.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests in 4.772 seconds.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tools/thermal/plot_deepoheat_npz.py \
+  --out-dir /tmp/chipletpart_ga100_block_raster_smoke/figures_test \
+  /tmp/chipletpart_ga100_block_raster_smoke/instances/*.thermal_result.field.npz
+```
+
+Result: passed and wrote PNG figures.
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 1 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_ga100_auto_figures_smoke \
+  --thermal-cache
+```
+
+Result: passed. The run wrote 2 thermal instance JSON files, 2 thermal result
+JSON files, 2 field NPZ files, and 12 PNG figures under
+`/tmp/chipletpart_ga100_auto_figures_smoke/figures`.
 
 Synthetic block-level rasterization validation on 2026-05-05:
 

@@ -32,7 +32,8 @@ score and does not instantiate the thermal encoder or surrogate.
 - `tools/thermal/reference_solver.py`: simplified deterministic label generator.
 - `tools/thermal/split_manifest.py`: reproducible train/val/test split tool.
 - `tools/thermal/summarize_labels.py`: label distribution and convergence report.
-- `tools/thermal/plot_instance.py` and `plot_prediction.py`: non-GUI debug plots.
+- `tools/thermal/plot_instance.py`, `plot_prediction.py`, and
+  `plot_deepoheat_npz.py`: non-GUI debug plots.
 - `tools/thermal/validate_instance.py`: schema checker for dumped instances.
 - `experiments/thermal_partitioning/`: pilot and paper-scale experiment scripts.
 - `src/test/test_thermal_mvp.cpp`: smoke test for disabled regression, mock
@@ -202,8 +203,19 @@ cd ChipletPart
   --thermal --thermal-device auto --thermal-cache
 ```
 
-By default this writes thermal JSON, per-candidate inference result JSON, and
-field `.npz` files under `results/thermal/<run_id>/`.
+By default this writes thermal JSON, per-candidate inference result JSON, field
+`.npz` files, and PNG figures under `results/thermal/<run_id>/`:
+
+- `instances/*.json`: thermal instance input to DeepOHeat.
+- `instances/*.thermal_result.json`: `t_max`, `t_avg`, device, and field path.
+- `instances/*.thermal_result.field.npz`: temperature field and power/sensor
+  arrays.
+- `figures/*_power_map.png`: rasterized power maps.
+- `figures/*_temperature_*.png`: temperature field slices.
+- `figures/*_sensor.png`: legacy 2D DeepOHeat sensor map when available.
+
+Use `--thermal-output-dir <dir>` to choose the result root and
+`--thermal-figure-dir <dir>` to place PNG figures somewhere else.
 
 ## Package Thermal Backend
 

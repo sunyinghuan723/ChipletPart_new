@@ -218,3 +218,21 @@ methodology, or experiment-policy decision is made.
 - Validation / follow-up: `thermal_mvp_test` now checks that dumped instances
   include block packing metadata, conserve raster power, and produce a
   nonuniform power-density map.
+
+## ADR-0014: Generate Thermal Figures During Script Runs
+
+- Date: 2026-05-05
+- Decision: `run_chiplet_test.sh --thermal` should post-process DeepOHeat field
+  NPZ files into PNG figures after a successful run.
+- Status: Accepted
+- Context: The thermal flow already writes `.thermal_result.field.npz` files,
+  but users had to run a separate plotting script to inspect the temperature
+  field and power map. The requested GA100 flow should leave directly viewable
+  figures in the result directory.
+- Implementation policy: `run_chiplet_test.sh` writes figures under
+  `<thermal-output-dir>/figures` by default, with `--thermal-figure-dir` as an
+  override. Figure generation is a post-processing step; if it fails, the
+  successful ChipletPart run is preserved and a warning is printed.
+- Consequences: Legacy 2D runs produce power, sensor, temperature slice, and
+  histogram PNGs. Package-thermal runs request field NPZ dumps and can plot
+  temperature maps plus power maps loaded from the matching instance JSON.

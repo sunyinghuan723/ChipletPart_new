@@ -41,6 +41,8 @@ show_help() {
     echo "  --thermal-python <py> Override DeepOHeat Python path"
     echo "  --thermal-script <py> Override DeepOHeat inference adapter path"
     echo "  --thermal-cache       Cache repeated thermal inference results"
+    echo "  --thermal-figure-dir <dir>"
+    echo "                        Directory for generated thermal PNG figures"
     echo "  --thermal-allow-fallback"
     echo "                        Fall back to cost-only objective if thermal inference fails"
     echo "  --help                Display this help message"
@@ -96,6 +98,7 @@ THERMAL_MODEL_PATH=""
 THERMAL_PYTHON=""
 THERMAL_SCRIPT=""
 THERMAL_BACKEND="legacy_2d_power_map"
+THERMAL_FIGURE_DIR=""
 THERMAL_CACHE=false
 THERMAL_ALLOW_FALLBACK=false
 
@@ -221,6 +224,10 @@ while [ "$#" -gt 0 ]; do
             THERMAL_CACHE=true
             shift
             ;;
+        --thermal-figure-dir|--thermal_figure_dir)
+            THERMAL_FIGURE_DIR="$2"
+            shift 2
+            ;;
         --thermal-allow-fallback|--thermal_allow_fallback)
             THERMAL_ALLOW_FALLBACK=true
             shift
@@ -297,6 +304,9 @@ if [ "$ENABLE_THERMAL" = true ]; then
     fi
     THERMAL_INSTANCE_DIR="${THERMAL_OUTPUT_DIR}/instances"
     THERMAL_MANIFEST="${THERMAL_OUTPUT_DIR}/manifest.jsonl"
+    if [ -z "$THERMAL_FIGURE_DIR" ]; then
+        THERMAL_FIGURE_DIR="${THERMAL_OUTPUT_DIR}/figures"
+    fi
     mkdir -p "$THERMAL_INSTANCE_DIR"
 
     THERMAL_ARGS=(
@@ -353,7 +363,40 @@ if [ "$ENABLE_THERMAL" = true ]; then
     echo -e "${BLUE}Thermal device: ${THERMAL_DEVICE}${NC}"
     echo -e "${BLUE}Thermal grid: ${THERMAL_GRID_X}x${THERMAL_GRID_Y}${NC}"
     echo -e "${BLUE}Thermal output directory: ${THERMAL_OUTPUT_DIR}${NC}"
+    echo -e "${BLUE}Thermal figure directory: ${THERMAL_FIGURE_DIR}${NC}"
 fi
+
+plot_thermal_figures() {
+    if [ "$ENABLE_THERMAL" != true ]; then
+        return 0
+    fi
+    if [ -z "$THERMAL_INSTANCE_DIR" ] || [ ! -d "$THERMAL_INSTANCE_DIR" ]; then
+        return 0
+    fi
+
+    local plot_script="${BASE_DIR}/tools/thermal/plot_deepoheat_npz.py"
+    if [ ! -f "$plot_script" ]; then
+        echo -e "${YELLOW}Warning: thermal plotting script not found: ${plot_script}${NC}"
+        return 0
+    fi
+
+    mapfile -t thermal_npz_files < <(find "$THERMAL_INSTANCE_DIR" -maxdepth 1 -name "*.thermal_result.field.npz" -print | sort)
+    if [ "${#thermal_npz_files[@]}" -eq 0 ]; then
+        echo -e "${YELLOW}Warning: no thermal field NPZ files found in ${THERMAL_INSTANCE_DIR}; skipping figures${NC}"
+        return 0
+    fi
+
+    mkdir -p "$THERMAL_FIGURE_DIR"
+    echo -e "${CYAN}Generating thermal figures from ${#thermal_npz_files[@]} NPZ file(s)${NC}"
+    "$THERMAL_PYTHON" "$plot_script" --out-dir "$THERMAL_FIGURE_DIR" "${thermal_npz_files[@]}"
+    local plot_status=$?
+    if [ $plot_status -eq 0 ]; then
+        echo -e "${GREEN}Thermal figures written to: ${THERMAL_FIGURE_DIR}${NC}"
+    else
+        echo -e "${YELLOW}Warning: thermal figure generation failed with exit code ${plot_status}${NC}"
+    fi
+    return 0
+}
 
 # Check if we're evaluating an existing partition
 if [ -n "$EVALUATE_PARTITION" ]; then
@@ -383,6 +426,7 @@ if [ -n "$EVALUATE_PARTITION" ]; then
     exit_code=$?
     if [ $exit_code -eq 0 ]; then
         echo -e "${GREEN}Partition evaluation completed successfully!${NC}"
+        plot_thermal_figures
     else
         echo -e "${RED}Partition evaluation failed with exit code $exit_code${NC}"
     fi
@@ -535,6 +579,7 @@ fi
 
 exit_code=$?
 if [ $exit_code -eq 0 ]; then
+    plot_thermal_figures
     if [ "$USE_TECH_ENUM" = true ]; then
         echo -e "${GREEN}Technology Enumeration completed successfully!${NC}"
     elif [ "$USE_CANONICAL_GA" = true ]; then

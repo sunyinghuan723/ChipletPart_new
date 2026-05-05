@@ -147,6 +147,33 @@ unavailable.
 
 ## Completed Content
 
+### 2026-05-05: Automatic Thermal Figure Generation
+
+- Added `tools/thermal/plot_deepoheat_npz.py` for non-GUI plotting of
+  DeepOHeat field NPZ files.
+- `run_chiplet_test.sh --thermal` now runs the plotter automatically after a
+  successful ChipletPart run.
+- Default figure output is `<thermal-output-dir>/figures`; use
+  `--thermal-figure-dir <dir>` to override it.
+- Legacy 2D field NPZs produce:
+  - `*_power_map.png`
+  - `*_sensor.png`
+  - `*_temperature_bottom.png`
+  - `*_temperature_middle.png`
+  - `*_temperature_top.png`
+  - `*_temperature_hist.png`
+- Package-thermal backend invocation now includes `--dump_field`, so it can
+  also leave a field NPZ for plotting. For package-thermal NPZs, the plotter
+  reads the matching instance JSON for the power map.
+- Validation on 2026-05-05 passed:
+  `bash -n run_chiplet_test.sh`,
+  `cmake --build build --target chipletPart thermal_mvp_test -j 4`,
+  `ctest -R thermal_mvp_test --output-on-failure`,
+  `tests/thermal/test_thermal_pipeline.py`, direct NPZ plotting, and a GA100
+  `run_chiplet_test.sh` smoke at `/tmp/chipletpart_ga100_auto_figures_smoke`.
+- The GA100 auto-figure smoke wrote 2 field NPZ files and 12 PNG figures under
+  `/tmp/chipletpart_ga100_auto_figures_smoke/figures`.
+
 ### 2026-05-05: Synthetic Block-Level Power Rasterization
 
 - `ThermalInstanceEncoder` now stores per-block scaled area, scaled compute
