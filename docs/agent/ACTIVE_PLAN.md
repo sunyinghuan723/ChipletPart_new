@@ -40,9 +40,9 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Train a small package_thermal surrogate on the Dataset V3 pilot and compare
-metrics against the Dataset V2 surrogate, or decide to improve reference labels
-first based on the Dataset V3 label summary.
+Complete the user-requested GA100 legacy DeepOHeat 2D thermal integration smoke:
+wire `model_epoch_10000.pth` through `run_chiplet_test.sh`, preserve GA100
+block-level power in thermal encoding, and document how to run the flow.
 
 ## Completed Small Tasks
 
@@ -90,6 +90,20 @@ first based on the Dataset V3 label summary.
   invalid instances `0`, `candidate_source=chipletpart_search`,
   `search_stage=search_candidate`, labels valid `30/30`, and split
   train/val/test `21/4/5`.
+- Wired `run_chiplet_test.sh --thermal` to the pretrained legacy DeepOHeat
+  2D checkpoint at
+  `DeepOHeat/DeepOHeat/2d_power_map/log/experiment_1/checkpoints/model_epoch_10000.pth`.
+- Fixed the legacy 2D adapter's `--device auto` handling and made it preserve
+  absolute power-map magnitude by default, with optional scale/normalization
+  controls.
+- Added GA100 hierarchical block-power mapping for thermal encoding: 179
+  `block_definitions.txt` power records are mapped onto the 45 netlist vertices
+  before being lifted through the candidate partition, so SM/L2/PCIe/HBM power
+  contributes to the thermal instance.
+- Validated a GA100 `--tech-enum --max-partitions 2` run with real DeepOHeat
+  inference. It produced 8 thermal results on `cuda:0`, all dumped instances
+  had `partition` length 179, and total candidate power varied with
+  technology/IO from about `398` to `502.704`.
 
 ## Next Small Verifiable Task
 
@@ -106,6 +120,42 @@ first based on the Dataset V3 label summary:
   reference-label/data improvement before larger training.
 
 ## Recent Validation
+
+GA100 legacy 2D thermal integration validation on 2026-05-05:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+```
+
+Result: passed. The build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests in 5.275 seconds.
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_ga100_run_script_smoke_k2 \
+  --thermal-cache
+```
+
+Result: passed. The run evaluated 5 canonical assignments, wrote 8 thermal
+result JSON files, used `cuda:0`, reported `t_max` from `303.064 K` to
+`309.173 K`, and selected best cost `35.589993` with technology assignment
+`[7nm, 7nm]`.
 
 Planned for this documentation milestone:
 

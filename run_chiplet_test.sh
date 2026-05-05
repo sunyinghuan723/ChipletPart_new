@@ -27,6 +27,22 @@ show_help() {
     echo "  --generations <num>   Specify number of generations for genetic algorithm (default: 50)"
     echo "  --population <num>    Specify population size for genetic algorithm (default: 50)"
     echo "  --evaluate-partition  Specify path to partition file for evaluation"
+    echo "  --thermal             Enable thermal-aware evaluation with DeepOHeat 2D checkpoint"
+    echo "  --thermal-mock        Enable deterministic mock thermal evaluation"
+    echo "  --thermal-output-dir <dir>"
+    echo "                        Directory for thermal instance JSON/result files"
+    echo "  --thermal-budget <K>  Peak temperature budget in Kelvin (default: 330)"
+    echo "  --thermal-lambda-peak <value>"
+    echo "                        Peak-temperature penalty weight (default: 0.001)"
+    echo "  --thermal-device <dev>"
+    echo "                        Thermal inference device: auto,cpu,cuda,cuda:0,cuda:1 (default: auto)"
+    echo "  --thermal-grid <n>    Use n x n thermal raster grid (default: 20)"
+    echo "  --thermal-model <pth> Override DeepOHeat 2D checkpoint path"
+    echo "  --thermal-python <py> Override DeepOHeat Python path"
+    echo "  --thermal-script <py> Override DeepOHeat inference adapter path"
+    echo "  --thermal-cache       Cache repeated thermal inference results"
+    echo "  --thermal-allow-fallback"
+    echo "                        Fall back to cost-only objective if thermal inference fails"
     echo "  --help                Display this help message"
     echo
     echo "Examples:"
@@ -34,6 +50,7 @@ show_help() {
     echo "  $0 design2 --genetic --tech-nodes 7nm,10nm,14nm --seed 123"
     echo "  $0 design3 --canonical-ga --tech-nodes 7nm,14nm,28nm --generations 30"
     echo "  $0 design4 --tech-enum --tech-nodes 7nm,14nm,28nm --max-partitions 3"
+    echo "  $0 ga100 --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 --thermal"
 }
 
 # Check if no arguments were provided
@@ -66,6 +83,21 @@ USE_TECH_ENUM=false
 DETAILED_OUTPUT=false
 TECH_NODES=""
 EVALUATE_PARTITION=""
+ENABLE_THERMAL=false
+THERMAL_MOCK=false
+THERMAL_OUTPUT_DIR=""
+THERMAL_BUDGET="330"
+THERMAL_LAMBDA_PEAK="0.001"
+THERMAL_LAMBDA_AVG="0"
+THERMAL_GRID_X="20"
+THERMAL_GRID_Y="20"
+THERMAL_DEVICE="auto"
+THERMAL_MODEL_PATH=""
+THERMAL_PYTHON=""
+THERMAL_SCRIPT=""
+THERMAL_BACKEND="legacy_2d_power_map"
+THERMAL_CACHE=false
+THERMAL_ALLOW_FALLBACK=false
 
 # Parse command line arguments
 while [ "$#" -gt 0 ]; do
@@ -126,6 +158,73 @@ while [ "$#" -gt 0 ]; do
             EVALUATE_PARTITION="$2"
             shift 2
             ;;
+        --thermal|--enable-thermal|--enable_thermal)
+            ENABLE_THERMAL=true
+            shift
+            ;;
+        --thermal-mock|--thermal_use_mock)
+            ENABLE_THERMAL=true
+            THERMAL_MOCK=true
+            THERMAL_BACKEND="mock"
+            shift
+            ;;
+        --thermal-output-dir|--thermal_dump_instances)
+            THERMAL_OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --thermal-budget|--thermal_budget)
+            THERMAL_BUDGET="$2"
+            shift 2
+            ;;
+        --thermal-lambda-peak|--thermal_lambda_peak)
+            THERMAL_LAMBDA_PEAK="$2"
+            shift 2
+            ;;
+        --thermal-lambda-avg|--thermal_lambda_avg)
+            THERMAL_LAMBDA_AVG="$2"
+            shift 2
+            ;;
+        --thermal-device|--thermal_device)
+            THERMAL_DEVICE="$2"
+            shift 2
+            ;;
+        --thermal-grid)
+            THERMAL_GRID_X="$2"
+            THERMAL_GRID_Y="$2"
+            shift 2
+            ;;
+        --thermal-grid-x|--thermal_grid_x)
+            THERMAL_GRID_X="$2"
+            shift 2
+            ;;
+        --thermal-grid-y|--thermal_grid_y)
+            THERMAL_GRID_Y="$2"
+            shift 2
+            ;;
+        --thermal-model|--thermal_model_path)
+            THERMAL_MODEL_PATH="$2"
+            shift 2
+            ;;
+        --thermal-python|--thermal_python)
+            THERMAL_PYTHON="$2"
+            shift 2
+            ;;
+        --thermal-script|--thermal_inference_script)
+            THERMAL_SCRIPT="$2"
+            shift 2
+            ;;
+        --thermal-backend|--thermal_backend)
+            THERMAL_BACKEND="$2"
+            shift 2
+            ;;
+        --thermal-cache|--thermal_cache)
+            THERMAL_CACHE=true
+            shift
+            ;;
+        --thermal-allow-fallback|--thermal_allow_fallback)
+            THERMAL_ALLOW_FALLBACK=true
+            shift
+            ;;
         *)
             echo -e "${RED}Error: Unknown option: $1${NC}"
             show_help
@@ -144,7 +243,7 @@ if ([ "$USE_GENETIC" = true ] && [ "$USE_CANONICAL_GA" = true ]) || \
 fi
 
 # Define the base directory where the executable and test data are located
-BASE_DIR="$(pwd)"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BASE_DIR}/build"
 EXECUTABLE="${BUILD_DIR}/bin/chipletPart"
 TEST_DATA_DIR="${BASE_DIR}/test_data/${TEST_CASE_NAME}"
@@ -170,6 +269,92 @@ for file in "$IO" "$LAYER" "$WAFER" "$ASSEMBLY" "$TEST" "$NETLIST" "$BLOCKS"; do
     fi
 done
 
+THERMAL_ARGS=()
+if [ "$ENABLE_THERMAL" = true ]; then
+    DEEPOHEAT_DIR="${BASE_DIR}/../DeepOHeat"
+    DEFAULT_THERMAL_MODEL="${DEEPOHEAT_DIR}/DeepOHeat/2d_power_map/log/experiment_1/checkpoints/model_epoch_10000.pth"
+    DEFAULT_THERMAL_PYTHON="${DEEPOHEAT_DIR}/.conda/deepoheat-py38/bin/python"
+    DEFAULT_LEGACY_THERMAL_SCRIPT="${DEEPOHEAT_DIR}/scripts/infer_package.py"
+    DEFAULT_PACKAGE_THERMAL_SCRIPT="${DEEPOHEAT_DIR}/package_thermal/infer_package.py"
+
+    if [ -z "$THERMAL_MODEL_PATH" ]; then
+        THERMAL_MODEL_PATH="$DEFAULT_THERMAL_MODEL"
+    fi
+    if [ -z "$THERMAL_PYTHON" ]; then
+        THERMAL_PYTHON="$DEFAULT_THERMAL_PYTHON"
+    fi
+    if [ -z "$THERMAL_SCRIPT" ]; then
+        if [ "$THERMAL_BACKEND" = "package_thermal" ]; then
+            THERMAL_SCRIPT="$DEFAULT_PACKAGE_THERMAL_SCRIPT"
+        else
+            THERMAL_SCRIPT="$DEFAULT_LEGACY_THERMAL_SCRIPT"
+        fi
+    fi
+
+    THERMAL_RUN_ID="${TEST_CASE_NAME}_thermal_seed${DEFAULT_SEED}_$(date +%Y%m%d_%H%M%S)"
+    if [ -z "$THERMAL_OUTPUT_DIR" ]; then
+        THERMAL_OUTPUT_DIR="${BASE_DIR}/results/thermal/${THERMAL_RUN_ID}"
+    fi
+    THERMAL_INSTANCE_DIR="${THERMAL_OUTPUT_DIR}/instances"
+    THERMAL_MANIFEST="${THERMAL_OUTPUT_DIR}/manifest.jsonl"
+    mkdir -p "$THERMAL_INSTANCE_DIR"
+
+    THERMAL_ARGS=(
+        --enable_thermal
+        --thermal_backend "$THERMAL_BACKEND"
+        --thermal_budget "$THERMAL_BUDGET"
+        --thermal_lambda_peak "$THERMAL_LAMBDA_PEAK"
+        --thermal_lambda_avg "$THERMAL_LAMBDA_AVG"
+        --thermal_grid_x "$THERMAL_GRID_X"
+        --thermal_grid_y "$THERMAL_GRID_Y"
+        --thermal_dump_instances "$THERMAL_INSTANCE_DIR"
+        --thermal_dump_manifest "$THERMAL_MANIFEST"
+        --thermal_dump_prefix "$THERMAL_RUN_ID"
+        --thermal_source_testcase "$TEST_CASE_NAME"
+        --thermal_run_id "$THERMAL_RUN_ID"
+        --thermal_candidate_source "chipletpart_search"
+        --thermal_search_stage "search_candidate"
+        --thermal_seed "$DEFAULT_SEED"
+        --thermal_device "$THERMAL_DEVICE"
+    )
+
+    if [ "$THERMAL_MOCK" = true ]; then
+        THERMAL_ARGS+=(--thermal_use_mock)
+    else
+        if [ ! -f "$THERMAL_MODEL_PATH" ]; then
+            echo -e "${RED}Error: Thermal model not found: $THERMAL_MODEL_PATH${NC}"
+            exit 1
+        fi
+        if [ ! -x "$THERMAL_PYTHON" ]; then
+            echo -e "${RED}Error: Thermal Python is not executable: $THERMAL_PYTHON${NC}"
+            exit 1
+        fi
+        if [ ! -f "$THERMAL_SCRIPT" ]; then
+            echo -e "${RED}Error: Thermal inference script not found: $THERMAL_SCRIPT${NC}"
+            exit 1
+        fi
+        THERMAL_ARGS+=(
+            --thermal_model_path "$THERMAL_MODEL_PATH"
+            --thermal_python "$THERMAL_PYTHON"
+            --thermal_inference_script "$THERMAL_SCRIPT"
+        )
+    fi
+    if [ "$THERMAL_CACHE" = true ]; then
+        THERMAL_ARGS+=(--thermal_cache)
+    fi
+    if [ "$THERMAL_ALLOW_FALLBACK" = true ]; then
+        THERMAL_ARGS+=(--thermal_allow_fallback)
+    fi
+
+    echo -e "${CYAN}Thermal-aware evaluation enabled${NC}"
+    echo -e "${BLUE}Thermal backend: ${THERMAL_BACKEND}${NC}"
+    echo -e "${BLUE}Thermal model: ${THERMAL_MODEL_PATH}${NC}"
+    echo -e "${BLUE}Thermal Python: ${THERMAL_PYTHON}${NC}"
+    echo -e "${BLUE}Thermal device: ${THERMAL_DEVICE}${NC}"
+    echo -e "${BLUE}Thermal grid: ${THERMAL_GRID_X}x${THERMAL_GRID_Y}${NC}"
+    echo -e "${BLUE}Thermal output directory: ${THERMAL_OUTPUT_DIR}${NC}"
+fi
+
 # Check if we're evaluating an existing partition
 if [ -n "$EVALUATE_PARTITION" ]; then
     if [ ! -f "$EVALUATE_PARTITION" ]; then
@@ -192,7 +377,8 @@ if [ -n "$EVALUATE_PARTITION" ]; then
         "$DEFAULT_REACH" \
         "$DEFAULT_SEPARATION" \
         "$DEFAULT_TECH" \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
         
     exit_code=$?
     if [ $exit_code -eq 0 ]; then
@@ -244,7 +430,8 @@ if [ "$USE_TECH_ENUM" = true ]; then
         --tech-nodes "$TECH_NODES" \
         --max-partitions "$DEFAULT_MAX_PARTITIONS" \
         $DETAIL_FLAG \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
         
 elif [ "$USE_CANONICAL_GA" = true ]; then
     # Make sure tech nodes are provided for canonical GA
@@ -279,7 +466,8 @@ elif [ "$USE_CANONICAL_GA" = true ]; then
         --tech-nodes "$TECH_NODES" \
         --generations "$DEFAULT_GENERATIONS" \
         --population "$DEFAULT_POPULATION" \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
         
 elif [ "$USE_GENETIC" = true ]; then
     # Make sure tech nodes are provided for genetic partitioning
@@ -307,7 +495,8 @@ elif [ "$USE_GENETIC" = true ]; then
         --tech-nodes "$TECH_NODES" \
         --generations "$DEFAULT_GENERATIONS" \
         --population "$DEFAULT_POPULATION" \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
     "$EXECUTABLE" \
         "$IO" \
         "$LAYER" \
@@ -322,7 +511,8 @@ elif [ "$USE_GENETIC" = true ]; then
         --tech-nodes "$TECH_NODES" \
         --generations "$DEFAULT_GENERATIONS" \
         --population "$DEFAULT_POPULATION" \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
 else
     echo -e "${GREEN}Running standard partitioning for test case: ${TEST_CASE_NAME}${NC}"
     echo -e "${BLUE}Tech node: ${DEFAULT_TECH}${NC}"
@@ -339,7 +529,8 @@ else
         "$DEFAULT_REACH" \
         "$DEFAULT_SEPARATION" \
         "$DEFAULT_TECH" \
-        --seed "$DEFAULT_SEED"
+        --seed "$DEFAULT_SEED" \
+        "${THERMAL_ARGS[@]}"
 fi
 
 exit_code=$?

@@ -16,6 +16,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 
 namespace chiplet {
@@ -143,6 +144,121 @@ bool IsPowerScalingTechSupported(const std::string& tech) {
   return supported.find(tech) != supported.end();
 }
 
+bool StartsWith(const std::string& text, const std::string& prefix) {
+  return text.rfind(prefix, 0) == 0;
+}
+
+int TrailingIndexOrMax(const std::string& text, const std::string& prefix) {
+  if (!StartsWith(text, prefix)) {
+    return std::numeric_limits<int>::max();
+  }
+  const std::string suffix = text.substr(prefix.size());
+  if (suffix.empty()) {
+    return std::numeric_limits<int>::max();
+  }
+  for (char c : suffix) {
+    if (!std::isdigit(static_cast<unsigned char>(c))) {
+      return std::numeric_limits<int>::max();
+    }
+  }
+  return std::stoi(suffix);
+}
+
+std::vector<int> FindIndexedTargets(const std::vector<std::string>& names,
+                                    const std::string& prefix) {
+  std::vector<int> targets;
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (StartsWith(names[i], prefix)) {
+      targets.push_back(static_cast<int>(i));
+    }
+  }
+  std::stable_sort(targets.begin(), targets.end(), [&](int lhs, int rhs) {
+    return TrailingIndexOrMax(names[lhs], prefix) <
+           TrailingIndexOrMax(names[rhs], prefix);
+  });
+  return targets;
+}
+
+void SortBlockIndicesBySuffix(const std::vector<block>& blocks,
+                              const std::string& prefix,
+                              std::vector<int>& indices) {
+  std::stable_sort(indices.begin(), indices.end(), [&](int lhs, int rhs) {
+    return TrailingIndexOrMax(blocks[lhs].name, prefix) <
+           TrailingIndexOrMax(blocks[rhs].name, prefix);
+  });
+}
+
+void AssignProportionally(const std::vector<int>& block_indices,
+                          const std::vector<int>& target_vertices,
+                          std::vector<int>& block_to_graph_vertex) {
+  if (block_indices.empty() || target_vertices.empty()) {
+    return;
+  }
+  for (size_t i = 0; i < block_indices.size(); ++i) {
+    const size_t target_pos = std::min(
+        target_vertices.size() - 1,
+        (i * target_vertices.size()) / block_indices.size());
+    block_to_graph_vertex[block_indices[i]] = target_vertices[target_pos];
+  }
+}
+
+std::vector<int> BuildBlockToGraphVertexMapping(
+    const std::vector<block>& blocks,
+    const std::vector<std::string>& graph_block_names) {
+  if (graph_block_names.empty()) {
+    throw std::runtime_error("[THERMAL] Netlist did not expose block names for "
+                             "thermal power mapping");
+  }
+
+  std::unordered_map<std::string, int> graph_index_by_name;
+  for (size_t i = 0; i < graph_block_names.size(); ++i) {
+    graph_index_by_name[graph_block_names[i]] = static_cast<int>(i);
+  }
+
+  std::vector<int> mapping(blocks.size(), -1);
+  std::vector<int> sm_blocks;
+  std::vector<int> hbm_phy_blocks;
+  std::vector<int> fallback_blocks;
+
+  for (size_t i = 0; i < blocks.size(); ++i) {
+    const auto exact = graph_index_by_name.find(blocks[i].name);
+    if (exact != graph_index_by_name.end()) {
+      mapping[i] = exact->second;
+    } else if (StartsWith(blocks[i].name, "sm_")) {
+      sm_blocks.push_back(static_cast<int>(i));
+    } else if (StartsWith(blocks[i].name, "hbm_1024_phy_")) {
+      hbm_phy_blocks.push_back(static_cast<int>(i));
+    } else {
+      fallback_blocks.push_back(static_cast<int>(i));
+    }
+  }
+
+  SortBlockIndicesBySuffix(blocks, "sm_", sm_blocks);
+  SortBlockIndicesBySuffix(blocks, "hbm_1024_phy_", hbm_phy_blocks);
+  AssignProportionally(sm_blocks, FindIndexedTargets(graph_block_names, "l2_"),
+                       mapping);
+  AssignProportionally(hbm_phy_blocks,
+                       FindIndexedTargets(graph_block_names, "hbm_1536_ctrl_"),
+                       mapping);
+
+  if (!fallback_blocks.empty()) {
+    std::vector<int> all_targets(graph_block_names.size());
+    std::iota(all_targets.begin(), all_targets.end(), 0);
+    AssignProportionally(fallback_blocks, all_targets, mapping);
+    std::cerr << "[THERMAL] Warning: distributed " << fallback_blocks.size()
+              << " block-power records without exact/hierarchy mapping across "
+              << graph_block_names.size() << " netlist vertices" << std::endl;
+  }
+
+  for (size_t i = 0; i < mapping.size(); ++i) {
+    if (mapping[i] < 0) {
+      throw std::runtime_error("[THERMAL] Could not map block power record '" +
+                               blocks[i].name + "' onto a netlist vertex");
+    }
+  }
+  return mapping;
+}
+
 double SafeAreaScaling(const std::string& initial_tech,
                        const std::string& actual_tech,
                        bool is_memory) {
@@ -261,7 +377,8 @@ ThermalInstance ThermalInstanceEncoder::Encode(
     const std::vector<float>& x_locations,
     const std::vector<float>& y_locations,
     const std::vector<block>& blocks,
-    const LibraryDicts* library_dicts) const {
+    const LibraryDicts* library_dicts,
+    const std::vector<int>* io_partition) const {
   if (partition.empty()) {
     throw std::runtime_error("[THERMAL] Missing partition for thermal encoding");
   }
@@ -286,8 +403,10 @@ ThermalInstance ThermalInstanceEncoder::Encode(
     compute_power[part_id] += b.power * SafePowerScaling(b.tech, techs[part_id]);
   }
 
+  const std::vector<int>& io_partition_ref =
+      io_partition == nullptr ? partition : *io_partition;
   std::vector<double> io_power =
-      ComputeIoPowerByPartition(partition, library_dicts, num_partitions);
+      ComputeIoPowerByPartition(io_partition_ref, library_dicts, num_partitions);
 
   ThermalInstance instance;
   instance.grid_x = config_.grid_x;
@@ -858,6 +977,14 @@ void ThermalAwareEvaluator::EnsureInitialized() {
     library_dicts_->global_adjacency_matrix = std::get<0>(netlist_result);
     library_dicts_->average_bandwidth_utilization = std::get<1>(netlist_result);
     library_dicts_->block_names = std::get<2>(netlist_result);
+    block_to_graph_vertex_ =
+        BuildBlockToGraphVertexMapping(blocks_, library_dicts_->block_names);
+    if (blocks_.size() != library_dicts_->block_names.size()) {
+      std::cout << "[THERMAL] Mapped " << blocks_.size()
+                << " block-level power records onto "
+                << library_dicts_->block_names.size()
+                << " netlist vertices for thermal encoding" << std::endl;
+    }
   } catch (const std::exception& e) {
     delete library_dicts_;
     library_dicts_ = nullptr;
@@ -954,9 +1081,31 @@ ThermalEvaluation ThermalAwareEvaluator::Evaluate(
     }
 
     if (!evaluation.cache_hit) {
-      ThermalInstance instance = encoder_.Encode(partition, tech_assignment, aspect_ratios,
-                                                 x_locations, y_locations, blocks_,
-                                                 library_dicts_);
+      std::vector<int> block_partition;
+      const std::vector<int>* compute_partition = &partition;
+      const std::vector<int>* io_partition = nullptr;
+      if (partition.size() != blocks_.size()) {
+        if (block_to_graph_vertex_.size() != blocks_.size()) {
+          throw std::runtime_error("[THERMAL] Missing block-to-netlist mapping for "
+                                   "hierarchical block power records");
+        }
+        block_partition.resize(blocks_.size(), 0);
+        for (size_t block_id = 0; block_id < blocks_.size(); ++block_id) {
+          const int graph_vertex = block_to_graph_vertex_[block_id];
+          if (graph_vertex < 0 ||
+              graph_vertex >= static_cast<int>(partition.size())) {
+            throw std::runtime_error("[THERMAL] Block-to-netlist mapping references "
+                                     "a vertex outside the candidate partition");
+          }
+          block_partition[block_id] = partition[graph_vertex];
+        }
+        compute_partition = &block_partition;
+        io_partition = &partition;
+      }
+
+      ThermalInstance instance = encoder_.Encode(
+          *compute_partition, tech_assignment, aspect_ratios, x_locations,
+          y_locations, blocks_, library_dicts_, io_partition);
       if (instance.source_testcase.empty()) {
         instance.source_testcase = PathStemOrUnknown(blocks_file_);
       }

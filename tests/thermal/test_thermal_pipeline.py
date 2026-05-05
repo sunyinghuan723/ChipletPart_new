@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -94,6 +95,16 @@ def make_instance(power: np.ndarray, path: Path) -> dict:
     return data
 
 
+def load_legacy_2d_adapter():
+    adapter_path = DEEPOHEAT_ROOT / "scripts" / "infer_package.py"
+    spec = importlib.util.spec_from_file_location("legacy_2d_infer_package", adapter_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import legacy adapter from {adapter_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class ThermalPipelineTests(unittest.TestCase):
     def test_device_parser(self) -> None:
         self.assertEqual(str(resolve_device("cpu")), "cpu")
@@ -123,6 +134,20 @@ class ThermalPipelineTests(unittest.TestCase):
                     "gpu_name": "",
                 },
             )
+
+    def test_legacy_2d_adapter_preserves_power_scale_by_default(self) -> None:
+        adapter = load_legacy_2d_adapter()
+        power = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        sensor, scaled = adapter._resize_to_sensor(
+            np, power.reshape(-1), 2, 2, power_scale=2.0, normalize=False
+        )
+        self.assertEqual(sensor.shape, (441,))
+        self.assertAlmostEqual(float(scaled.max()), 8.0)
+
+        _, normalized = adapter._resize_to_sensor(
+            np, power.reshape(-1), 2, 2, power_scale=2.0, normalize=True
+        )
+        self.assertAlmostEqual(float(normalized.max()), 1.0)
 
     def test_reference_solver_zero_power(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

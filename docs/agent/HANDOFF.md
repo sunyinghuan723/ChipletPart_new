@@ -21,16 +21,19 @@ revalidation.
 
 ## Current Task
 
-From the handoff summary: the project is moving from a pilot-scale
-thermal-aware pipeline to a paper-scale experimental pipeline. The next work is
-not more toy integration, but more reliable data, training, experiment
-automation, revalidation, and paper-quality figures/tables.
+Most recent user-requested milestone connected the pretrained legacy DeepOHeat
+2D power-map checkpoint into the GA100 ChipletPart flow through
+`run_chiplet_test.sh --thermal`.
 
-Most recent milestone created a small provenance-aware Dataset V3 pilot from
-real ChipletPart search-candidate dumps, labeled it with the simplified
-reference solver, summarized it, and split it for surrogate work. The next
-milestone should either train a small package_thermal surrogate on this pilot
-or decide to improve reference labels first based on the label distribution.
+The code now handles GA100's hierarchy mismatch: the netlist has 45 partition
+vertices, while `test_data/ga100/block_definitions.txt` has 179 block-level
+power records. Thermal evaluation maps all 179 power records onto netlist
+vertices and then through the candidate partition so SM, L2, PCIe, HBM PHY, and
+HBM controller power all contribute to the thermal raster.
+
+After this compatibility milestone, the broader project priority remains the
+paper-scale `package_thermal` path: more reliable data, stronger labels,
+training, experiment automation, revalidation, and paper-ready figures/tables.
 
 ## Confirmed Decisions
 
@@ -38,6 +41,8 @@ or decide to improve reference labels first based on the label distribution.
 - In the thermal-aware flow, floorplan is an internal evaluation object.
 - `package_thermal` backend is the main research path.
 - `legacy_2d_power_map` is compatibility/debug only.
+- For GA100 compatibility with the legacy 2D checkpoint, map hierarchical
+  block-level power records onto netlist vertices before thermal encoding.
 - The current simplified 2D effective reference solver is not a signoff solver.
 - Future paper experiments should try to connect HotSpot, 3D-ICE, Celsius, FEM,
   a commercial solver, or use such tools for calibration.
@@ -57,6 +62,11 @@ DeepOHeat's original idea is an operator-learning framework that maps PDE
 configuration to temperature fields. The original `2d_power_map` checkpoint only
 fits a 2D top power map and is not suitable as the final package-level thermal
 surrogate.
+
+The legacy 2D adapter at `DeepOHeat/scripts/infer_package.py` now supports
+`--device auto`, preserves absolute power-map magnitude by default, accepts an
+optional config JSON / `--power_scale` / `--normalize_power`, and writes a
+small `.field.npz` next to each `.thermal_result.json`.
 
 The current project adds `DeepOHeat/package_thermal/`. The package-level
 surrogate follows:
@@ -126,6 +136,42 @@ training/evaluation because earlier sessions saw driver/PyTorch CUDA
 unavailable.
 
 ## Completed Content
+
+### 2026-05-05: GA100 Legacy 2D Thermal Flow
+
+- `run_chiplet_test.sh --thermal` now defaults to:
+  - model:
+    `../DeepOHeat/DeepOHeat/2d_power_map/log/experiment_1/checkpoints/model_epoch_10000.pth`
+  - Python:
+    `../DeepOHeat/.conda/deepoheat-py38/bin/python`
+  - inference script:
+    `../DeepOHeat/scripts/infer_package.py`
+  - backend: `legacy_2d_power_map`
+  - grid: `20x20`
+  - output: `results/thermal/<run_id>/`
+- Thermal output layout from the script:
+  - `results/thermal/<run_id>/manifest.jsonl`
+  - `results/thermal/<run_id>/instances/*.json`
+  - `results/thermal/<run_id>/instances/*.thermal_result.json`
+  - `results/thermal/<run_id>/instances/*.thermal_result.field.npz`
+- GA100 thermal encoding maps 179 block-level power rows onto 45 netlist
+  vertices. Exact names map directly; `sm_*` records are distributed across
+  `l2_*` vertices; `hbm_1024_phy_*` records are distributed across
+  `hbm_1536_ctrl_*` vertices. The per-block area/power/type records remain
+  separate when applying technology scaling.
+- Validation command:
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_ga100_run_script_smoke_k2 \
+  --thermal-cache
+```
+
+Result: passed. It evaluated 5 canonical assignments, wrote 8 thermal result
+JSON files, used `cuda:0`, produced `t_max` in the range `303.064-309.173 K`,
+and selected best cost `35.589993` with `[7nm, 7nm]`.
 
 ### Phase 1: Thermal-Aware ChipletPart MVP
 

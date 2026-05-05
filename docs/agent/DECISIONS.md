@@ -171,3 +171,27 @@ methodology, or experiment-policy decision is made.
 - Validation / follow-up: Dataset collection summaries must include counts by
   `candidate_source` and `search_stage`; future Dataset V3 runs should prefer
   `candidate_source=chipletpart_search` for training/evaluation data.
+
+## ADR-0012: Map GA100 Block-Level Power Onto Netlist Vertices For Legacy 2D Thermal Runs
+
+- Date: 2026-05-05
+- Decision: For GA100 thermal compatibility runs, keep every
+  `block_definitions.txt` power record and map it onto the smaller netlist
+  vertex set before applying the candidate partition.
+- Status: Accepted
+- Context: `test_data/ga100/block_level_netlist.xml` exposes 45 partition
+  vertices, while `test_data/ga100/block_definitions.txt` contains 179
+  block-level power records. The old thermal encoder assumed a one-to-one
+  partition/block relationship and failed on GA100. The user's advisor
+  specifically called out that block-level power should be considered.
+- Mapping policy: exact block names map directly; `sm_*` blocks are distributed
+  proportionally across `l2_*` vertices; `hbm_1024_phy_*` blocks are
+  distributed proportionally across `hbm_1536_ctrl_*` vertices; any future
+  unmapped records are distributed across all netlist vertices with a warning.
+- Consequences: Thermal compute power and area use all GA100 block records and
+  retain their individual technology-scaling type. IO power continues to use
+  the original netlist partition and adjacency matrices. Cost-only behavior is
+  unchanged.
+- Validation / follow-up: A GA100 `--tech-enum --max-partitions 2` run with the
+  pretrained legacy 2D checkpoint completed, wrote 8 thermal result JSON files,
+  and every dumped thermal instance had `partition` length 179.

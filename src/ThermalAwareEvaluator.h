@@ -90,7 +90,8 @@ public:
                          const std::vector<float>& x_locations,
                          const std::vector<float>& y_locations,
                          const std::vector<block>& blocks,
-                         const LibraryDicts* library_dicts) const;
+                         const LibraryDicts* library_dicts,
+                         const std::vector<int>* io_partition = nullptr) const;
 
   std::string DumpJson(const ThermalInstance& instance,
                        const std::string& dump_dir,
@@ -174,6 +175,7 @@ private:
   std::string netlist_file_;
   std::string blocks_file_;
   std::vector<block> blocks_;
+  std::vector<int> block_to_graph_vertex_;
   LibraryDicts* library_dicts_ = nullptr;
   ThermalInstanceEncoder encoder_;
   std::unique_ptr<ThermalSurrogate> surrogate_;

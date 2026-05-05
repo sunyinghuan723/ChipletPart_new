@@ -60,6 +60,13 @@ The block compute power uses ChipletPart's existing technology scaling helpers.
 The IO term mirrors the cost model's IO definitions, bandwidth utilization, and
 energy-per-bit fields.
 
+For GA100, the netlist partition operates on 45 vertices while
+`block_definitions.txt` contains 179 block-level power records. Thermal
+encoding maps those power records onto the netlist vertices first, then expands
+the candidate partition back to all power records before rasterization. Exact
+names map directly; `sm_*` records map across `l2_*` vertices; and
+`hbm_1024_phy_*` records map across `hbm_1536_ctrl_*` vertices.
+
 ## Current Approximations
 
 - Chiplet-internal block placement is not available in the partitioning flow, so
@@ -67,10 +74,13 @@ energy-per-bit fields.
 - `power_density_w_per_mm2` uses the cost-model power unit divided by mm^2. The
   JSON records this explicitly because the original cost model does not expose a
   separate SI power unit contract.
-- The DeepOHeat adapter currently consumes only the 2D top power-density map,
-  normalized and resampled to the 21x21 branch sensor used by the pretrained
-  `2d_power_map` checkpoint. Geometry/material/boundary channels are preserved
-  in the JSON for future retraining but are not yet consumed by that checkpoint.
+- The DeepOHeat legacy adapter currently consumes only the 2D top
+  power-density map, preserves its absolute magnitude by default, and resamples
+  it to the 21x21 branch sensor used by the pretrained `2d_power_map`
+  checkpoint. Optional config/CLI flags can scale or normalize the power map
+  for compatibility experiments. Geometry/material/boundary channels are
+  preserved in the JSON for future retraining but are not yet consumed by that
+  checkpoint.
 - The `package_thermal` backend consumes the full channel tensor and is the
   intended research path. It is currently trained from the simplified reference
   solver labels described in `docs/thermal_dataset_format.md`.
@@ -171,6 +181,19 @@ cd ChipletPart/build
 
 `--thermal_dump_instances` is required for non-mock inference because the C++
 adapter passes the dumped JSON path to Python.
+
+The `run_chiplet_test.sh` helper now wires the GA100-compatible legacy 2D
+checkpoint automatically:
+
+```bash
+cd ChipletPart
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 2 \
+  --thermal --thermal-device auto --thermal-cache
+```
+
+By default this writes thermal JSON, per-candidate inference result JSON, and
+field `.npz` files under `results/thermal/<run_id>/`.
 
 ## Package Thermal Backend
 
