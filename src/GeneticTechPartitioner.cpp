@@ -597,7 +597,9 @@ void GeneticTechPartitioner::InitializePopulation(
       // adjust the num_parts and tech assignment
       num_parts = *std::max_element(partition.begin(), partition.end()) + 1;
       float cost = refiner_->GetCostFromScratch(partition);
-      if (thermal_evaluator_ && thermal_evaluator_->Enabled() && success) {
+      if (!success) {
+        cost = std::numeric_limits<float>::max();
+      } else if (thermal_evaluator_ && thermal_evaluator_->Enabled()) {
         auto thermal_eval = thermal_evaluator_->Evaluate(
             cost, partition, tech_assignment, result_aspect_ratios,
             result_x_locations, result_y_locations, success);

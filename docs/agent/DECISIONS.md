@@ -236,3 +236,25 @@ methodology, or experiment-policy decision is made.
 - Consequences: Legacy 2D runs produce power, sensor, temperature slice, and
   histogram PNGs. Package-thermal runs request field NPZ dumps and can plot
   temperature maps plus power maps loaded from the matching instance JSON.
+
+## ADR-0015: Penalize Invalid Initial GA Candidates
+
+- Date: 2026-05-06
+- Decision: Random solutions created during `GeneticTechPartitioner`
+  population initialization must receive maximum cost when the floorplanner
+  reports infeasible/invalid placement.
+- Status: Accepted
+- Context: A GA100 heterogeneous thermal validation run exposed an invalid
+  initial random candidate with a finite base cost. Because the initial
+  population path did not enforce maximum cost for failed floorplans, that
+  candidate could become the reported GA best even though final output marked
+  `Valid Solution: No`.
+- Consequences: The random-initial-solution path now mirrors the later
+  `EvaluateFitness` safeguard: invalid candidates are kept invalid and assigned
+  `std::numeric_limits<float>::max()`. This preserves the cost-only baseline
+  intent while preventing infeasible initial solutions from winning either
+  cost-only or thermal-aware GA runs.
+- Validation / follow-up: Rebuilt `chipletPart`, reran GA100 heterogeneous
+  cost-only and thermal validation runs, and both reported `Valid Solution:
+  Yes`. The pre-fix invalid run is archived outside the repo at
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1/heterogeneous_thermal_pre_fix`.

@@ -40,13 +40,24 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Complete the user-requested GA100 block-level spatial thermal encoding update:
-preserve GA100 block-level power, synthesize block positions inside chiplets,
-rasterize each block into the DeepOHeat power map, and document how to run and
-inspect the flow.
+Next smallest useful step: decide whether to run a broader thermal-budget sweep
+or move the GA100 validation experiment into a more automated report generator.
+The latest requested validation experiment is complete and archived under
+`/home/yhsun/Chiplet-Partitioning/experiment_v1`.
 
 ## Completed Small Tasks
 
+- Completed GA100 validation experiment V1 on 2026-05-06 comparing
+  homogeneous/heterogeneous cost-only runs against `--thermal` runs using
+  `--thermal-budget 250`, `--seed 1`, and the pretrained legacy 2D DeepOHeat
+  checkpoint. Summary artifacts:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1/analysis/summary.csv`,
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1/analysis/analysis.md`, and
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1/analysis/commands.sh`.
+- Fixed `GeneticTechPartitioner` initial population handling so random
+  candidates with failed floorplans are assigned maximum cost and cannot become
+  the GA best solution. The issue was exposed by an archived pre-fix thermal
+  run at `/home/yhsun/Chiplet-Partitioning/experiment_v1/heterogeneous_thermal_pre_fix`.
 - Created `docs/agent/` directory for persistent agent state.
 - Added this active plan with startup, update, validation, and commit protocol.
 - Added `AGENTS.md` as repository-level Codex rules.
@@ -460,6 +471,23 @@ Result: passed. Output directory:
   smoke for surrogate debugging, but not a final paper-scale dataset.
 - Surrogate error on final candidates is still significant and requires
   calibration, larger data, and revalidation.
+
+## Latest Validation
+
+2026-05-06:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+```
+
+Result: passed.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed, 1/1 test.
 
 ## Current Do-Not-Do List
 

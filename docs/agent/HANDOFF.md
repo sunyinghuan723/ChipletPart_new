@@ -609,10 +609,39 @@ before relying on it after new code changes.
 - Experiment V1: `/tmp/chipletpart_thermal_experiments_v1`
 - Dataset V3 smoke: `/tmp/chipletpart_thermal_dataset_v3_smoke`
 - Dataset V3 pilot: `/tmp/chipletpart_thermal_dataset_v3_pilot`
+- User GA100 validation experiment V1:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1`
+  - Summary: `analysis/summary.csv`
+  - Narrative: `analysis/analysis.md`
+  - Rerun commands: `analysis/commands.sh`
 
 ## Recent Experiment Results
 
 From previous Codex-reported result and project docs:
+
+GA100 validation experiment V1, run on 2026-05-06 with `--seed 1` and
+`--thermal-budget 250` for thermal-aware cases:
+
+- Homogeneous cost-only: best cost `31.620317`, `5` parts, feasible `Yes`,
+  elapsed `81.83 s`.
+- Homogeneous thermal: best objective `38.281555`, base cost `32.533447`,
+  `T_max=325.816284 K`, thermal penalty `5.748109`, `3` parts, feasible `Yes`,
+  elapsed `106.07 s`; wrote `18` NPZ files and `108` PNG figures.
+- Heterogeneous cost-only (`--genetic --tech-nodes 7nm,10nm,45nm`): best cost
+  `31.843674`, `4` parts, valid `Yes`, technologies all `7nm`, elapsed
+  `528.65 s`.
+- Heterogeneous thermal: best objective `35.604126`, base cost about
+  `31.8581`, `T_max=311.204 K`, thermal penalty about `3.74598`, `4` parts,
+  valid `Yes`, technologies all `7nm`, elapsed `2622.14 s`; wrote `468` NPZ
+  files and `2808` PNG figures.
+- The homogeneous thermal run clearly changes the selected partition count
+  from 5 to 3. The heterogeneous thermal run changes ranking more subtly:
+  it trades a small base-cost increase for about `1.9 K` lower peak temperature
+  versus a near cost-only candidate.
+- An earlier heterogeneous thermal attempt selected an invalid initial random
+  GA solution. It is archived at
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1/heterogeneous_thermal_pre_fix`
+  and should not be used for the final comparison.
 
 Dataset V2:
 
@@ -681,9 +710,15 @@ Revalidation:
 ## Easy-To-Miss Points
 
 - Experiment V1 is a pilot, not a final paper result.
+- User GA100 validation experiment V1 under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v1` used the legacy
+  `2d_power_map` DeepOHeat checkpoint, not the package-level research path.
 - `legacy_2d_power_map` is not the final method.
 - `package_thermal` uses the full channel tensor, but labels still come from a
   simplified solver.
+- In `GeneticTechPartitioner`, invalid random initial candidates must retain
+  maximum cost. A pre-fix run showed that otherwise an invalid finite-cost
+  initial solution can become the GA best.
 - Strict thermal budget increasing cost is expected.
 - High-budget and cost-only producing the same result is expected.
 - Final-candidate surrogate error around +19 K has been observed and must be
