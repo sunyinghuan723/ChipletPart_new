@@ -1681,7 +1681,7 @@ void ChipletPart::Partition(
     refine_iters_ = 3;
   }
   
-  bool floorplanning = false;
+  bool floorplanning = true;
   
   // Create a ChipletRefiner with cost model files to test initialization
   Console::Info("Creating ChipletRefiner with cost model files to test initialization");

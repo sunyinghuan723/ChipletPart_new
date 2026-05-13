@@ -41,8 +41,10 @@ show_help() {
     echo "  --thermal-python <py> Override DeepOHeat Python path"
     echo "  --thermal-script <py> Override DeepOHeat inference adapter path"
     echo "  --thermal-cache       Cache repeated thermal inference results"
+    echo "  --thermal-plot-figures"
+    echo "                        Generate PNG figures from thermal NPZ files (default: off)"
     echo "  --thermal-figure-dir <dir>"
-    echo "                        Directory for generated thermal PNG figures"
+    echo "                        Directory for generated thermal PNG figures when plotting is enabled"
     echo "  --thermal-allow-fallback"
     echo "                        Fall back to cost-only objective if thermal inference fails"
     echo "  --help                Display this help message"
@@ -99,6 +101,7 @@ THERMAL_PYTHON=""
 THERMAL_SCRIPT=""
 THERMAL_BACKEND="legacy_2d_power_map"
 THERMAL_FIGURE_DIR=""
+THERMAL_PLOT_FIGURES=false
 THERMAL_CACHE=false
 THERMAL_ALLOW_FALLBACK=false
 
@@ -222,6 +225,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --thermal-cache|--thermal_cache)
             THERMAL_CACHE=true
+            shift
+            ;;
+        --thermal-plot-figures|--thermal_plot_figures)
+            THERMAL_PLOT_FIGURES=true
             shift
             ;;
         --thermal-figure-dir|--thermal_figure_dir)
@@ -363,11 +370,18 @@ if [ "$ENABLE_THERMAL" = true ]; then
     echo -e "${BLUE}Thermal device: ${THERMAL_DEVICE}${NC}"
     echo -e "${BLUE}Thermal grid: ${THERMAL_GRID_X}x${THERMAL_GRID_Y}${NC}"
     echo -e "${BLUE}Thermal output directory: ${THERMAL_OUTPUT_DIR}${NC}"
-    echo -e "${BLUE}Thermal figure directory: ${THERMAL_FIGURE_DIR}${NC}"
+    if [ "$THERMAL_PLOT_FIGURES" = true ]; then
+        echo -e "${BLUE}Thermal figure directory: ${THERMAL_FIGURE_DIR}${NC}"
+    else
+        echo -e "${BLUE}Thermal figure generation: disabled${NC}"
+    fi
 fi
 
 plot_thermal_figures() {
     if [ "$ENABLE_THERMAL" != true ]; then
+        return 0
+    fi
+    if [ "$THERMAL_PLOT_FIGURES" != true ]; then
         return 0
     fi
     if [ -z "$THERMAL_INSTANCE_DIR" ] || [ ! -d "$THERMAL_INSTANCE_DIR" ]; then
