@@ -590,18 +590,9 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
     }
   }
 
-  // Calculate initial legacy_cost_ for the partition if cost model is available
+  // Calculate the initial objective for the partition if the cost model is available.
   if (cost_model_initialized_ && libraryDicts_ != nullptr) {
-    legacy_cost_ = getCostFromScratch(
-        solution, 
-        tech_array_, 
-        aspect_ratios_, 
-        x_locations_, 
-        y_locations_,
-        libraryDicts_, 
-        blocks_,
-        cost_coefficient_, 
-        power_coefficient_);
+    legacy_cost_ = RefreshCurrentObjective(solution, true);
   }
   
   if (max_move_ <= 0) {
@@ -650,6 +641,14 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
           auto fp_tuple = Floorplanner(200, 50, 1.0);
           
           bool success = std::get<3>(fp_tuple);
+          if (success) {
+            SetAspectRatios(std::get<0>(fp_tuple));
+            SetXLocations(std::get<1>(fp_tuple));
+            SetYLocations(std::get<2>(fp_tuple));
+          }
+          if (ThermalEvaluationEnabled()) {
+            RefreshCurrentObjective(solution, success);
+          }
           
           // Keep sequences for next iteration
         } 
@@ -663,6 +662,17 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
     const float gain =
         Pass(hgraph, upper_block_balance, lower_block_balance,
              cur_block_balance, net_degs, solution, visited_vertices_flag);
+
+    if (ThermalEvaluationEnabled() && floorplanner_) {
+      auto fp_tuple = RunFloorplanner(solution, hgraph, 200, 50, 1.0);
+      const bool success = std::get<3>(fp_tuple);
+      if (success) {
+        SetAspectRatios(std::get<0>(fp_tuple));
+        SetXLocations(std::get<1>(fp_tuple));
+        SetYLocations(std::get<2>(fp_tuple));
+      }
+      RefreshCurrentObjective(solution, success);
+    }
     
     // Only clear sequences if we're done with refinement or no longer need them
     if (floorplanner_ == true && (gain <= 0.0 || i == refiner_iters_ - 1)) {
@@ -674,16 +684,7 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
       return; // stop if there is no improvement
     }
     if (cost_model_initialized_ && libraryDicts_ != nullptr) {
-      legacy_cost_ = getCostFromScratch(
-          solution, 
-          tech_array_, 
-          aspect_ratios_, 
-          x_locations_, 
-          y_locations_,
-          libraryDicts_, 
-          blocks_,
-          cost_coefficient_, 
-          power_coefficient_);
+      legacy_cost_ = RefreshCurrentObjective(solution, true);
     }
   }
 }
@@ -775,6 +776,20 @@ float ChipletRefiner::Pass(
     const int from_part = candidate->GetSourcePart();
     // Get destination partition after the move
     const int to_part = candidate->GetDestinationPart();
+
+    if (ThermalMoveEvaluationEnabled()) {
+      Partition candidate_partition = solution;
+      candidate_partition[vertex] = to_part;
+      const float candidate_objective = GetObjectiveFromScratch(
+          candidate_partition, hgraph, true, true, 50, 10, 0.00001f, true);
+      float thermal_gain = -std::numeric_limits<float>::max() / 4.0f;
+      if (std::isfinite(candidate_objective) &&
+          candidate_objective < std::numeric_limits<float>::max() - 1.0f) {
+        thermal_gain = legacy_cost_ - candidate_objective;
+      }
+      candidate->SetGain(thermal_gain);
+    }
+
     // Update cost tracking
     legacy_cost_ -= candidate->GetGain();
     
@@ -2080,6 +2095,152 @@ bool ChipletRefiner::InitializeCostModel() {
     cost_model_initialized_ = false;
     return false;
   }
+}
+
+std::vector<std::string>
+ChipletRefiner::GetPartitionTechAssignment(
+    const std::vector<int>& partition) const {
+  int num_partitions = 0;
+  for (int part_id : partition) {
+    num_partitions = std::max(num_partitions, part_id + 1);
+  }
+
+  std::vector<std::string> tech_assignment(num_partitions, "7nm");
+  if (tech_array_.empty()) {
+    return tech_assignment;
+  }
+
+  if (static_cast<int>(tech_array_.size()) == num_partitions) {
+    return tech_array_;
+  }
+
+  if (tech_array_.size() == partition.size()) {
+    std::vector<bool> assigned(num_partitions, false);
+    for (size_t vertex = 0; vertex < partition.size(); ++vertex) {
+      const int part_id = partition[vertex];
+      if (part_id >= 0 && part_id < num_partitions && !assigned[part_id] &&
+          !tech_array_[vertex].empty()) {
+        tech_assignment[part_id] = tech_array_[vertex];
+        assigned[part_id] = true;
+      }
+    }
+    for (int part_id = 0; part_id < num_partitions; ++part_id) {
+      if (!assigned[part_id]) {
+        tech_assignment[part_id] = tech_array_.front();
+      }
+    }
+    return tech_assignment;
+  }
+
+  for (int part_id = 0; part_id < num_partitions; ++part_id) {
+    if (part_id < static_cast<int>(tech_array_.size()) &&
+        !tech_array_[part_id].empty()) {
+      tech_assignment[part_id] = tech_array_[part_id];
+    } else {
+      tech_assignment[part_id] = tech_array_.front();
+    }
+  }
+  return tech_assignment;
+}
+
+float ChipletRefiner::GetBaseCostWithFloorplan(
+    const std::vector<int>& partition,
+    const std::vector<float>& aspect_ratios,
+    const std::vector<float>& x_locations,
+    const std::vector<float>& y_locations,
+    bool approx_state) const {
+  if (!cost_model_initialized_ || libraryDicts_ == nullptr) {
+    return 0.0f;
+  }
+  int num_partitions = 0;
+  for (int part_id : partition) {
+    num_partitions = std::max(num_partitions, part_id + 1);
+  }
+  std::vector<float> local_aspect_ratios = aspect_ratios;
+  std::vector<float> local_x_locations = x_locations;
+  std::vector<float> local_y_locations = y_locations;
+  local_aspect_ratios.resize(num_partitions, 1.0f);
+  local_x_locations.resize(num_partitions, 0.0f);
+  local_y_locations.resize(num_partitions, 0.0f);
+
+  return getCostFromScratch(
+      partition,
+      GetPartitionTechAssignment(partition),
+      local_aspect_ratios,
+      local_x_locations,
+      local_y_locations,
+      libraryDicts_,
+      blocks_,
+      cost_coefficient_,
+      power_coefficient_,
+      approx_state);
+}
+
+float ChipletRefiner::RefreshCurrentObjective(
+    const std::vector<int>& partition,
+    bool floorplan_success) {
+  if (ThermalEvaluationEnabled() && !floorplan_success) {
+    legacy_cost_ = std::numeric_limits<float>::max();
+    return legacy_cost_;
+  }
+  legacy_cost_ = GetObjectiveFromScratch(
+      partition, nullptr, false, false, 0, 0, 0.0f, false);
+  return legacy_cost_;
+}
+
+float ChipletRefiner::GetObjectiveFromScratch(
+    const std::vector<int>& partition,
+    const HGraphPtr& hgraph,
+    bool approx_state,
+    bool run_floorplanner,
+    int max_steps,
+    int perturbations,
+    float cooling_acceleration_factor,
+    bool local) {
+  std::vector<float> eval_aspect_ratios = aspect_ratios_;
+  std::vector<float> eval_x_locations = x_locations_;
+  std::vector<float> eval_y_locations = y_locations_;
+  bool floorplan_success = true;
+
+  if (run_floorplanner) {
+    if (!hgraph) {
+      return std::numeric_limits<float>::max();
+    }
+    const auto saved_local_pos = local_pos_seq_;
+    const auto saved_local_neg = local_neg_seq_;
+    const auto saved_global_pos = global_pos_seq_;
+    const auto saved_global_neg = global_neg_seq_;
+    std::vector<int> candidate_partition = partition;
+    auto floor_result = RunFloorplanner(
+        candidate_partition, hgraph, max_steps, perturbations,
+        cooling_acceleration_factor, local);
+    eval_aspect_ratios = std::get<0>(floor_result);
+    eval_x_locations = std::get<1>(floor_result);
+    eval_y_locations = std::get<2>(floor_result);
+    floorplan_success = std::get<3>(floor_result);
+    local_pos_seq_ = saved_local_pos;
+    local_neg_seq_ = saved_local_neg;
+    global_pos_seq_ = saved_global_pos;
+    global_neg_seq_ = saved_global_neg;
+  }
+
+  const float base_cost = GetBaseCostWithFloorplan(
+      partition, eval_aspect_ratios, eval_x_locations, eval_y_locations,
+      approx_state);
+  if (!ThermalEvaluationEnabled()) {
+    return base_cost;
+  }
+  if (!floorplan_success ||
+      base_cost >= std::numeric_limits<float>::max() - 1.0f) {
+    return std::numeric_limits<float>::max();
+  }
+
+  const std::vector<std::string> tech_assignment =
+      GetPartitionTechAssignment(partition);
+  auto thermal_eval = thermal_evaluator_->Evaluate(
+      base_cost, partition, tech_assignment, eval_aspect_ratios,
+      eval_x_locations, eval_y_locations, floorplan_success);
+  return static_cast<float>(thermal_eval.objective);
 }
 
 // Calculate the cost difference of moving a block between partitions

@@ -40,13 +40,29 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Next smallest useful step: decide whether to run a broader thermal-budget sweep
-or move the GA100 validation experiment into a more automated report generator.
-The latest requested validation experiment is complete and archived under
-`/home/yhsun/Chiplet-Partitioning/experiment_v1`.
+Next smallest useful step: review whether homogeneous refinement thermal calls
+should be batched/persisted through a long-running DeepOHeat service before
+running multi-seed or budget-sweep experiments. The latest requested GA100
+validation experiment is complete and archived under
+`/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
 
 ## Completed Small Tasks
 
+- Completed GA100 validation experiment V2 on 2026-05-14 after pushing thermal
+  objective evaluation into partition refinement. Summary artifacts:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/summary.csv`,
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/analysis.md`,
+  and
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/commands.sh`.
+- Updated homogeneous refinement so thermal mode refreshes the full objective
+  after fast/standard floorplanner calls and evaluates executed FM/KL moves
+  with a fresh fast floorplan plus DeepOHeat thermal objective. Updated
+  heterogeneous GA thermal mode so thermal is applied after the standard
+  post-refinement floorplanner for each GA solution, without per-move thermal
+  inside GA refinement.
+- Reduced default thermal-mode log volume by hiding per-candidate cost and
+  thermal objective prints unless `CHIPLET_PART_VERBOSE_COST` or
+  `CHIPLET_PART_VERBOSE_THERMAL` is set.
 - Completed GA100 validation experiment V1 on 2026-05-06 comparing
   homogeneous/heterogeneous cost-only runs against `--thermal` runs using
   `--thermal-budget 250`, `--seed 1`, and the pretrained legacy 2D DeepOHeat
@@ -128,19 +144,51 @@ The latest requested validation experiment is complete and archived under
 
 ## Next Small Verifiable Task
 
-Train a small package_thermal surrogate on the Dataset V3 pilot and compare
-metrics against the Dataset V2 surrogate, or decide to improve reference labels
-first based on the Dataset V3 label summary:
-
-- Use `/tmp/chipletpart_thermal_dataset_v3_pilot/manifest_train.jsonl`,
-  `manifest_val.jsonl`, and `manifest_test.jsonl`.
-- Keep training small and explicitly label it as a pilot, not paper-scale.
-- Compare field MAE/RMSE and `T_max`/`T_avg` errors against the prior Dataset
-  V2 surrogate numbers.
-- If Dataset V3 label distribution looks too narrow or biased, prioritize
-  reference-label/data improvement before larger training.
+Prototype a runtime improvement for thermal refinement before scaling to
+multi-seed or budget-sweep runs. The most likely next step is replacing repeated
+DeepOHeat Python subprocess launches with a persistent service or batched
+inference path, while keeping the V2 objective placement unchanged.
 
 ## Recent Validation
+
+GA100 refinement-thermal validation on 2026-05-14:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test -j 4
+```
+
+Result: passed. The build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests.
+
+```bash
+./run_chiplet_test.sh 48_1_14_4_1600_1600 \
+  --seed 7 --thermal-mock --thermal-budget 250 \
+  --thermal-output-dir /tmp/chipletpart_refinement_thermal_mock2 \
+  --thermal-cache
+```
+
+Result: passed and wrote 652 mock thermal manifest records.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/commands.sh
+```
+
+Result: passed. V2 summary is archived under
+`/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/summary.csv`.
 
 Thermal figure post-processing validation on 2026-05-05:
 

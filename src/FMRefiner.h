@@ -41,8 +41,10 @@
 #include "Utilities.h"
 #include "floorplan.h"
 #include "evaluator_cpp.h" // Include the cost model evaluator
+#include "ThermalAwareEvaluator.h"
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <set>
 namespace chiplet {
 
@@ -164,6 +166,34 @@ public:
   
   // Control the weight of cost model vs connectivity gain
   void SetCostModelWeight(float weight) { cost_model_weight_ = weight; }
+
+  void SetThermalEvaluator(std::shared_ptr<ThermalAwareEvaluator> evaluator,
+                           bool evaluate_refinement_moves) {
+    thermal_evaluator_ = std::move(evaluator);
+    thermal_refinement_moves_ = evaluate_refinement_moves;
+  }
+
+  bool ThermalEvaluationEnabled() const {
+    return thermal_evaluator_ != nullptr && thermal_evaluator_->Enabled();
+  }
+
+  bool ThermalMoveEvaluationEnabled() const {
+    return ThermalEvaluationEnabled() && thermal_refinement_moves_;
+  }
+
+  float GetCurrentObjective() const { return legacy_cost_; }
+
+  float RefreshCurrentObjective(const std::vector<int>& partition,
+                                bool floorplan_success = true);
+
+  float GetObjectiveFromScratch(const std::vector<int>& partition,
+                                const HGraphPtr& hgraph = nullptr,
+                                bool approx_state = false,
+                                bool run_floorplanner = false,
+                                int max_steps = 50,
+                                int perturbations = 10,
+                                float cooling_acceleration_factor = 0.00001f,
+                                bool local = true);
 
   std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, bool>
   RunFloorplanner(std::vector<int> &partition, HGraphPtr hgraph, int max_steps,
@@ -426,6 +456,13 @@ public:
 private:
   bool Terminate(std::deque<float> &history, float &new_cost);
   void InitSlopes(int num_parts);
+  std::vector<std::string>
+  GetPartitionTechAssignment(const std::vector<int>& partition) const;
+  float GetBaseCostWithFloorplan(const std::vector<int>& partition,
+                                 const std::vector<float>& aspect_ratios,
+                                 const std::vector<float>& x_locations,
+                                 const std::vector<float>& y_locations,
+                                 bool approx_state = false) const;
   void InitializeSingleGainBucket(
       GainBuckets &buckets,
       int to_pid, // move the vertex into this block (block_id = to_pid)
@@ -620,6 +657,8 @@ private:
   std::vector<float> aspect_ratios_;
   std::vector<float> x_locations_;
   std::vector<float> y_locations_;
+  std::shared_ptr<ThermalAwareEvaluator> thermal_evaluator_;
+  bool thermal_refinement_moves_ = false;
   bool approx_state_ = 0;
   // tally global runtime
   mutable float total_cost_model_time_ = 0.0;

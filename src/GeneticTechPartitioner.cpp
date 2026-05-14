@@ -596,10 +596,25 @@ void GeneticTechPartitioner::InitializePopulation(
                        partition);
       // adjust the num_parts and tech assignment
       num_parts = *std::max_element(partition.begin(), partition.end()) + 1;
+      const bool thermal_enabled =
+          thermal_evaluator_ && thermal_evaluator_->Enabled();
+      if (thermal_enabled) {
+        auto final_floor_result =
+            refiner_->RunFloorplanner(partition, hypergraph_, 200, 50, 0.00001);
+        result_aspect_ratios = std::get<0>(final_floor_result);
+        result_x_locations = std::get<1>(final_floor_result);
+        result_y_locations = std::get<2>(final_floor_result);
+        success = std::get<3>(final_floor_result);
+        if (success) {
+          refiner_->SetAspectRatios(result_aspect_ratios);
+          refiner_->SetXLocations(result_x_locations);
+          refiner_->SetYLocations(result_y_locations);
+        }
+      }
       float cost = refiner_->GetCostFromScratch(partition);
       if (!success) {
         cost = std::numeric_limits<float>::max();
-      } else if (thermal_evaluator_ && thermal_evaluator_->Enabled()) {
+      } else if (thermal_enabled) {
         auto thermal_eval = thermal_evaluator_->Evaluate(
             cost, partition, tech_assignment, result_aspect_ratios,
             result_x_locations, result_y_locations, success);
@@ -883,6 +898,21 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
         solution.num_partitions = *std::max_element(solution.partition.begin(),
                                                     solution.partition.end()) +
                                   1;
+        const bool thermal_enabled =
+            thermal_evaluator_ && thermal_evaluator_->Enabled();
+        if (thermal_enabled) {
+          auto final_floor_result = refiner_->RunFloorplanner(
+              solution.partition, hypergraph_, 200, 50, 0.00001);
+          result_aspect_ratios = std::get<0>(final_floor_result);
+          result_x_locations = std::get<1>(final_floor_result);
+          result_y_locations = std::get<2>(final_floor_result);
+          success = std::get<3>(final_floor_result);
+          if (success) {
+            refiner_->SetAspectRatios(result_aspect_ratios);
+            refiner_->SetXLocations(result_x_locations);
+            refiner_->SetYLocations(result_y_locations);
+          }
+        }
         // Get the cost
         cost = refiner_->GetCostFromScratch(solution.partition);
 
@@ -892,7 +922,7 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
           // max float" << std::endl;
           cost = std::numeric_limits<float>::max();
         }
-        if (thermal_evaluator_ && thermal_evaluator_->Enabled() && success &&
+        if (thermal_enabled && success &&
             cost < std::numeric_limits<float>::max() - 1.0f) {
           auto thermal_eval = thermal_evaluator_->Evaluate(
               cost, solution.partition, solution.tech_nodes,

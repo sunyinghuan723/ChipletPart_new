@@ -24,6 +24,10 @@ namespace {
 
 constexpr double kEpsilon = 1e-9;
 
+bool VerboseThermalLogging() {
+  return std::getenv("CHIPLET_PART_VERBOSE_THERMAL") != nullptr;
+}
+
 std::string JsonEscape(const std::string& value) {
   std::ostringstream os;
   for (char c : value) {
@@ -1211,6 +1215,9 @@ double ThermalAwareEvaluator::Objective(double base_cost,
 }
 
 void ThermalAwareEvaluator::LogEvaluation(const ThermalEvaluation& evaluation) const {
+  if (!VerboseThermalLogging()) {
+    return;
+  }
   std::cout << "[THERMAL] cost=" << evaluation.base_cost
             << " t_max=" << evaluation.thermal.t_max
             << " t_avg=" << evaluation.thermal.t_avg

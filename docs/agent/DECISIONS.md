@@ -258,3 +258,32 @@ methodology, or experiment-policy decision is made.
   cost-only and thermal validation runs, and both reported `Valid Solution:
   Yes`. The pre-fix invalid run is archived outside the repo at
   `/home/yhsun/Chiplet-Partitioning/experiment_v1/heterogeneous_thermal_pre_fix`.
+
+## ADR-0016: Push Thermal Objective Into Partition Refinement
+
+- Date: 2026-05-14
+- Decision: In homogeneous thermal mode, FM/KL refinement evaluates each
+  executed move with a fresh fast floorplan and the full thermal objective.
+  The refiner also refreshes the current objective after both fast and
+  standard floorplanner calls. In heterogeneous GA thermal mode, the FM/KL
+  refiner stays cost-only and thermal is applied only after the standard
+  post-refinement floorplanner for each GA solution.
+- Status: Accepted
+- Context: The previous thermal flow only called DeepOHeat after a candidate
+  partition/technology assignment already had a final floorplan. That made
+  thermal affect final ranking, but not the FM/KL refinement path used to
+  create the candidate.
+- Runtime policy: Homogeneous mode pays the extra DeepOHeat cost for the
+  refinement trajectory. Heterogeneous mode avoids per-move thermal inside GA
+  because the population already creates many refined floorplans. Thermal cache
+  remains enabled by script option, and default per-evaluation C++ logging is
+  quiet unless `CHIPLET_PART_VERBOSE_COST` or
+  `CHIPLET_PART_VERBOSE_THERMAL` is set.
+- Consequences: Cost-only behavior remains gated by `--enable_thermal`. Failed
+  floorplans receive maximum objective before thermal-aware ranking, so invalid
+  candidates cannot win. Homogeneous thermal runs are expected to be slower
+  because refinement now calls the thermal backend many more times.
+- Validation / follow-up: Rebuilt `chipletPart`, passed `thermal_mvp_test`,
+  passed the Python thermal pipeline tests, ran a mock refinement smoke, and
+  started GA100 validation under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.

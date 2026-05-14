@@ -2153,6 +2153,9 @@ void ChipletPart::Partition(
           chiplet_netlist_file,         // netlist_file
           chiplet_blocks_file           // blocks_file
       );
+      if (thermal_evaluator && thermal_evaluator->Enabled()) {
+        thread_refiner->SetThermalEvaluator(thermal_evaluator, true);
+      }
 
       if (hypergraph_->GetNumVertices() > 200) {
         thread_refiner->SetBoundary();
@@ -2211,7 +2214,10 @@ void ChipletPart::Partition(
         thread_refiner->SetYLocations(result_y_locations);
         
         // Run refinement
-        float initial_cost = thread_refiner->GetCostFromScratch(partition_copy);
+        float initial_cost =
+            (thermal_evaluator && thermal_evaluator->Enabled())
+                ? thread_refiner->RefreshCurrentObjective(partition_copy, success)
+                : thread_refiner->GetCostFromScratch(partition_copy);
         thread_refiner->Refine(hypergraph_, upper_block_balance, lower_block_balance, partition_copy);
         
         // Run KL refinement after FM refinement
@@ -2246,14 +2252,29 @@ void ChipletPart::Partition(
           Console::Error("Unknown exception in KL refinement");
         }
         
+        int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
+        if (thermal_evaluator && thermal_evaluator->Enabled() && floorplanning) {
+          auto final_floor_result = thread_refiner->RunFloorplanner(
+              partition_copy, hypergraph_, 200, 50, 0.00001);
+          result_aspect_ratios = std::get<0>(final_floor_result);
+          result_x_locations = std::get<1>(final_floor_result);
+          result_y_locations = std::get<2>(final_floor_result);
+          success = std::get<3>(final_floor_result);
+          if (success) {
+            thread_refiner->SetAspectRatios(result_aspect_ratios);
+            thread_refiner->SetXLocations(result_x_locations);
+            thread_refiner->SetYLocations(result_y_locations);
+          }
+        }
         float final_cost = thread_refiner->GetCostFromScratch(partition_copy);
         float base_cost = final_cost;
-        int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
         double thermal_t_max = 0.0;
         double thermal_t_avg = 0.0;
         double thermal_penalty = 0.0;
-        if (thermal_evaluator && thermal_evaluator->Enabled() && success &&
-            final_cost < std::numeric_limits<float>::max() - 1.0f) {
+        if (!success) {
+          final_cost = std::numeric_limits<float>::max();
+        } else if (thermal_evaluator && thermal_evaluator->Enabled() &&
+                   final_cost < std::numeric_limits<float>::max() - 1.0f) {
           std::vector<std::string> thermal_tech(final_num_parts, tech);
           auto thermal_eval = thermal_evaluator->Evaluate(
               final_cost, partition_copy, thermal_tech, result_aspect_ratios,

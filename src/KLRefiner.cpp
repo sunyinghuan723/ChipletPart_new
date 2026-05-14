@@ -153,6 +153,16 @@ void KLRefiner::Refine(const HGraphPtr& hgraph,
       auto fp_result = RunFloorplanner(solution, hgraph, max_fp_steps_, max_fp_perturbations_, 0.95);
       
       bool success = std::get<3>(fp_result);
+      if (cost_evaluator_) {
+        if (success) {
+          cost_evaluator_->SetAspectRatios(std::get<0>(fp_result));
+          cost_evaluator_->SetXLocations(std::get<1>(fp_result));
+          cost_evaluator_->SetYLocations(std::get<2>(fp_result));
+        }
+        if (cost_evaluator_->ThermalEvaluationEnabled()) {
+          cost_evaluator_->RefreshCurrentObjective(solution, success);
+        }
+      }
     }
     
     // Save the current max_swaps_ value
@@ -169,6 +179,19 @@ void KLRefiner::Refine(const HGraphPtr& hgraph,
     max_swaps_ = saved_max_swaps;
     
     total_improvement += improvement;
+
+    if (floorplanner_ && cost_evaluator_ &&
+        cost_evaluator_->ThermalEvaluationEnabled()) {
+      auto fp_result = RunFloorplanner(
+          solution, hgraph, max_fp_steps_, max_fp_perturbations_, 0.95);
+      const bool success = std::get<3>(fp_result);
+      if (success) {
+        cost_evaluator_->SetAspectRatios(std::get<0>(fp_result));
+        cost_evaluator_->SetXLocations(std::get<1>(fp_result));
+        cost_evaluator_->SetYLocations(std::get<2>(fp_result));
+      }
+      cost_evaluator_->RefreshCurrentObjective(solution, success);
+    }
     
     // Stop if no improvement
     if (improvement <= 0) {
@@ -232,6 +255,22 @@ float KLRefiner::KLPass(const HGraphPtr& hgraph,
     int block_a = solution[vertex_a];
     int block_b = solution[vertex_b];
     float swap_gain = CalculateSwapGain(hgraph, vertex_a, block_a, vertex_b, block_b, solution, net_degs);
+    float selected_objective_after = std::numeric_limits<float>::quiet_NaN();
+    if (cost_evaluator_ && cost_evaluator_->ThermalMoveEvaluationEnabled()) {
+      Partition test_solution = solution;
+      test_solution[vertex_a] = block_b;
+      test_solution[vertex_b] = block_a;
+      selected_objective_after = cost_evaluator_->GetObjectiveFromScratch(
+          test_solution, hgraph, true, true, 50, 10, 0.00001f, true);
+      if (std::isfinite(selected_objective_after) &&
+          selected_objective_after < std::numeric_limits<float>::max() - 1.0f) {
+        swap_gain = (cost_evaluator_->GetCurrentObjective() -
+                     selected_objective_after) *
+                    weight_scale_factor_;
+      } else {
+        swap_gain = -std::numeric_limits<float>::max() / 4.0f;
+      }
+    }
     
     // Early termination: if gain is too small, it's not worth continuing
     if (swap_gain <= 0) {
@@ -245,6 +284,11 @@ float KLRefiner::KLPass(const HGraphPtr& hgraph,
     
     // Execute the swap
     ExecuteSwap(hgraph, vertex_a, vertex_b, block_balance, net_degs, solution);
+    if (cost_evaluator_ && cost_evaluator_->ThermalMoveEvaluationEnabled() &&
+        std::isfinite(selected_objective_after) &&
+        selected_objective_after < std::numeric_limits<float>::max() - 1.0f) {
+      cost_evaluator_->SetLegacyCost(selected_objective_after);
+    }
     
     // Lock these vertices for the remainder of this pass
     locked_vertices[vertex_a] = true;
@@ -1113,4 +1157,4 @@ HGraphPtr KLRefiner::GenerateNetlist(const HGraphPtr hgraph, const std::vector<i
       io_cell_sizes);
 }
 
-} // namespace chiplet 
+} // namespace chiplet

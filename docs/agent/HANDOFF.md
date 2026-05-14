@@ -21,26 +21,29 @@ revalidation.
 
 ## Current Task
 
-Most recent user-requested milestone connected the pretrained legacy DeepOHeat
-2D power-map checkpoint into the GA100 ChipletPart flow through
-`run_chiplet_test.sh --thermal`.
+Most recent user-requested milestone pushed thermal objective evaluation deeper
+into ChipletPart partition refinement and validated the change on GA100 under
+`/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
 
-The code now handles GA100's hierarchy mismatch: the netlist has 45 partition
-vertices, while `test_data/ga100/block_definitions.txt` has 179 block-level
-power records. Thermal evaluation maps all 179 power records onto netlist
-vertices and then through the candidate partition so SM, L2, PCIe, HBM PHY, and
-HBM controller power all contribute to the thermal raster.
+Homogeneous thermal mode now wires `ThermalAwareEvaluator` into the FM/KL
+refiners. After fast and standard floorplanner calls, the refiner refreshes the
+current objective with DeepOHeat. Each executed FM/KL move is scored with a
+fresh fast floorplan and the thermal-aware total objective before the pass
+selects its best prefix.
 
-The thermal power raster is no longer chiplet-uniform for compute power. When
-real block placement is unavailable, ChipletPart now creates a deterministic
-synthetic treemap inside each chiplet, records those packed block rectangles in
-the dumped JSON `blocks` array, and rasterizes every block's scaled compute
-power over its own rectangle. Partition-induced IO power remains a chiplet-level
-term and is still spread uniformly over the chiplet footprint.
+Heterogeneous GA thermal mode intentionally does not run thermal for every
+FM/KL move. The GA refiner remains cost-only, then a standard floorplanner is
+run after the refinement round for each GA solution and thermal is added to the
+solution fitness. This keeps the user's requested standard-floorplan-only
+thermal placement for heterogeneous mode.
 
-After this compatibility milestone, the broader project priority remains the
-paper-scale `package_thermal` path: more reliable data, stronger labels,
-training, experiment automation, revalidation, and paper-ready figures/tables.
+Default per-candidate cost and thermal objective logging is quiet to keep the
+larger thermal runs manageable. Re-enable it with
+`CHIPLET_PART_VERBOSE_COST=1` and/or `CHIPLET_PART_VERBOSE_THERMAL=1`.
+
+The broader project priority remains the paper-scale `package_thermal` path:
+more reliable data, stronger labels, training, experiment automation,
+revalidation, and paper-ready figures/tables.
 
 ## Confirmed Decisions
 
@@ -173,6 +176,33 @@ unavailable.
   `run_chiplet_test.sh` smoke at `/tmp/chipletpart_ga100_auto_figures_smoke`.
 - The GA100 auto-figure smoke wrote 2 field NPZ files and 12 PNG figures under
   `/tmp/chipletpart_ga100_auto_figures_smoke/figures`.
+
+### 2026-05-14: Thermal-Aware Refinement And GA100 V2
+
+- Homogeneous thermal mode now evaluates refinement trajectory moves with the
+  full thermal objective instead of applying DeepOHeat only to final candidate
+  ranking.
+- `FMRefiner` owns optional thermal evaluator state and exposes
+  `RefreshCurrentObjective()` / `GetObjectiveFromScratch()` helpers so FM and
+  KL can share thermal-aware scoring.
+- `KLRefiner` refreshes thermal objective after floorplanner calls and rescores
+  the selected swap with a fast floorplan plus thermal objective.
+- Heterogeneous GA thermal mode applies thermal after a standard floorplanner
+  following each GA solution's refinement round. Per-move thermal is not enabled
+  inside GA refinement.
+- Failed floorplans receive maximum objective before thermal-aware ranking.
+- Verbose C++ per-candidate cost and thermal logs are now opt-in through
+  `CHIPLET_PART_VERBOSE_COST` and `CHIPLET_PART_VERBOSE_THERMAL`.
+- Validation passed:
+  `cmake --build build --target chipletPart thermal_mvp_test -j 4`,
+  `ctest -R thermal_mvp_test --output-on-failure`,
+  `tests/thermal/test_thermal_pipeline.py`, and a mock refinement smoke.
+- GA100 V2 experiment output:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
+- V2 summary:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/summary.csv`.
+- V2 commands:
+  `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/commands.sh`.
 
 ### 2026-05-05: Synthetic Block-Level Power Rasterization
 
