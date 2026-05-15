@@ -3920,6 +3920,7 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
         // Create a refiner for evaluating and refining the partitions
         std::vector<int> reaches(hypergraph_->GetNumHyperedges(), reach);
         std::shared_ptr<chiplet::ChipletRefiner> refiner;
+        std::shared_ptr<chiplet::ThermalAwareEvaluator> thermal_evaluator;
         
         try {
             refiner = std::make_shared<chiplet::ChipletRefiner>(
@@ -3945,6 +3946,13 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
             std::vector<float> y_locations(num_vertices, 0.0);
             refiner->SetXLocations(x_locations);
             refiner->SetYLocations(y_locations);
+
+            if (thermal_config_.enable_thermal) {
+                thermal_evaluator = std::make_shared<chiplet::ThermalAwareEvaluator>(
+                    thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+                refiner->SetThermalEvaluator(thermal_evaluator, true);
+                Console::Info("[THERMAL] Thermal-aware FM/KL refinement moves are enabled");
+            }
         } catch (const std::exception& e) {
             Console::Error("Exception creating refiner: " + std::string(e.what()));
             // Restore original num_parts_ before returning
@@ -3995,22 +4003,8 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                     }
                 }
                 
-                // Create a tech_array that maps each vertex to a technology
-                std::vector<std::string> tech_array(num_vertices);
-                for (int v = 0; v < num_vertices; v++) {
-                    int part_id = partition_copy[v];
-                    
-                    // Assign technology based on partition ID
-                    if (part_id >= 0 && part_id < static_cast<int>(tech_assignment.size())) {
-                        tech_array[v] = tech_assignment[part_id];
-                    } else {
-                        // If part_id is out of range, use the first technology
-                        tech_array[v] = tech_assignment[0];
-                    }
-                }
-                
-                // Set the tech array in the refiner
-                refiner->SetTechArray(tech_array);
+                // Set partition-level technology assignment in the refiner.
+                refiner->SetTechArray(tech_assignment);
                 
                 // Get initial cost of this partition
                 float initial_cost = refiner->GetCostFromScratch(partition_copy);
@@ -4023,18 +4017,7 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                     // Continue without refinement
                 }
                 
-                // Update tech array after refinement
-                for (int v = 0; v < num_vertices; v++) {
-                    int part_id = partition_copy[v];
-                    if (part_id >= 0 && part_id < static_cast<int>(tech_assignment.size())) {
-                        tech_array[v] = tech_assignment[part_id];
-                    } else {
-                        tech_array[v] = tech_assignment[0];
-                    }
-                }
-                
-                // Update the refiner with the new tech array
-                refiner->SetTechArray(tech_array);
+                refiner->SetTechArray(tech_assignment);
                 
                 std::vector<float> thermal_aspect_ratios;
                 std::vector<float> thermal_x_locations;
@@ -4054,10 +4037,8 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
 
                 // Get final cost after refinement
                 float final_cost = refiner->GetCostFromScratch(partition_copy);
-                if (thermal_config_.enable_thermal) {
-                    ThermalAwareEvaluator thermal_evaluator(
-                        thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
-                    auto thermal_eval = thermal_evaluator.Evaluate(
+                if (thermal_evaluator && thermal_evaluator->Enabled()) {
+                    auto thermal_eval = thermal_evaluator->Evaluate(
                         final_cost, partition_copy, tech_assignment,
                         thermal_aspect_ratios, thermal_x_locations,
                         thermal_y_locations, thermal_floorplan_success);

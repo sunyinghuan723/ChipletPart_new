@@ -516,7 +516,9 @@ void GeneticTechPartitioner::InitializePopulation(
   if (thermal_config_.enable_thermal) {
     thermal_evaluator_ = std::make_shared<ThermalAwareEvaluator>(
         thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+    refiner_->SetThermalEvaluator(thermal_evaluator_, true);
     Console::Info("[THERMAL] Thermal-aware GA fitness is enabled");
+    Console::Info("[THERMAL] Thermal-aware FM/KL refinement moves are enabled");
   }
 
   // Generate initial partitions
@@ -815,6 +817,9 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
 
       // Set technology array in refiner - CRITICAL!
       refiner_->SetTechArray(solution.tech_nodes);
+      if (thermal_evaluator_ && thermal_evaluator_->Enabled()) {
+        refiner_->SetThermalEvaluator(thermal_evaluator_, true);
+      }
 
       // Setup balance constraints
       Matrix<float> upper_block_balance;
