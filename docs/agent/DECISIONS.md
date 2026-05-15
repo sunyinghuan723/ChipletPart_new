@@ -287,3 +287,33 @@ methodology, or experiment-policy decision is made.
   passed the Python thermal pipeline tests, ran a mock refinement smoke, and
   started GA100 validation under
   `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
+
+## ADR-0017: Use Persistent Python Workers For DeepOHeat Inference
+
+- Date: 2026-05-15
+- Decision: Real DeepOHeat inference from C++ should use a persistent Python
+  worker per `ThermalAwareEvaluator` when possible, instead of launching a new
+  Python process for every thermal evaluation.
+- Status: Accepted
+- Context: After ADR-0016, homogeneous thermal refinement calls DeepOHeat for
+  selected FM/KL moves and swaps. Launching Python, importing Torch/DeepOHeat,
+  loading the checkpoint, and initializing CUDA for every move made runtime
+  impractically high.
+- Implementation policy: `PythonDeepOHeatAdapter` starts the configured
+  inference script with `--server`, sends one JSON object per request through
+  stdin, reads one JSON object per response from stdout, and stops the worker
+  on adapter destruction. The old subprocess invocation remains as fallback.
+  Both `legacy_2d_power_map` and `package_thermal` inference scripts must keep
+  single-shot CLI behavior and support `--server`.
+- Consequences: FM/KL refinement keeps the V2 thermal objective placement while
+  amortizing Python/Torch/model/CUDA startup across many move evaluations.
+  Thermal inference is still serialized by the evaluator mutex, which avoids
+  concurrent writes through a single worker. Cost-only and mock thermal paths
+  are unchanged.
+- Validation / follow-up: Direct legacy service inference on one archived GA100
+  instance processed two requests in one Python worker; service-reported
+  runtime dropped from about `0.512 s` on the first request to about `0.013 s`
+  on the second. A real `48_1_14_4_1600_1600` refinement thermal smoke wrote
+  `658` real DeepOHeat result records and completed successfully in
+  `203.39 s`. Next runtime target is reducing per-move field NPZ writes or
+  adding batched requests.

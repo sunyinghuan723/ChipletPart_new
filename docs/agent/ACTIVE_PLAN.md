@@ -40,14 +40,19 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Next smallest useful step: review whether homogeneous refinement thermal calls
-should be batched/persisted through a long-running DeepOHeat service before
-running multi-seed or budget-sweep experiments. The latest requested GA100
-validation experiment is complete and archived under
-`/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
+Next smallest useful step: reduce remaining thermal-mode runtime by limiting
+expensive artifact writes during refinement or adding a batched inference path.
+The first persistent-service milestone is complete and validated.
 
 ## Completed Small Tasks
 
+- Added a persistent DeepOHeat Python service path on 2026-05-15. C++
+  `PythonDeepOHeatAdapter` now starts one long-running Python worker per
+  evaluator, sends JSON-line inference requests over pipes, and falls back to
+  the old subprocess path if the service is unavailable. Both legacy
+  `2d_power_map` and `package_thermal` adapters support `--server` mode and
+  keep imports, model weights, eval mesh/coords, and CUDA context alive across
+  requests.
 - Completed GA100 validation experiment V2 on 2026-05-14 after pushing thermal
   objective evaluation into partition refinement. Summary artifacts:
   `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100/analysis/summary.csv`,
@@ -144,12 +149,88 @@ validation experiment is complete and archived under
 
 ## Next Small Verifiable Task
 
-Prototype a runtime improvement for thermal refinement before scaling to
-multi-seed or budget-sweep runs. The most likely next step is replacing repeated
-DeepOHeat Python subprocess launches with a persistent service or batched
-inference path, while keeping the V2 objective placement unchanged.
+Reduce per-evaluation artifact overhead in refinement thermal mode. Legacy 2D
+inference still writes one compressed field NPZ per evaluated move/swap, which
+is useful for debug but costly for long searches; a "metrics-only during
+refinement, dump final/top candidates" mode is the next low-risk runtime
+improvement.
 
 ## Recent Validation
+
+Persistent DeepOHeat service validation on 2026-05-15:
+
+```bash
+python3 -m py_compile \
+  DeepOHeat/scripts/infer_package.py \
+  DeepOHeat/package_thermal/infer_package.py
+```
+
+Result: passed.
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test -j 4
+```
+
+Result: passed. The build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests.
+
+```bash
+nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv,noheader
+```
+
+Result: two NVIDIA GeForce RTX 4090 GPUs visible with driver `570.124.06`.
+The DeepOHeat environment reports PyTorch `2.0.0+cu117`, CUDA available, and
+two visible CUDA devices.
+
+```bash
+/usr/bin/time -f 'SERVICE_TWO_CALLS_ELAPSED_SEC=%e' bash -c '... | \
+  /home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  /home/yhsun/Chiplet-Partitioning/DeepOHeat/scripts/infer_package.py \
+  --server \
+  --model /home/yhsun/Chiplet-Partitioning/DeepOHeat/DeepOHeat/2d_power_map/log/experiment_1/checkpoints/model_epoch_10000.pth \
+  --device auto'
+```
+
+Result: passed on an archived GA100 thermal instance. The service processed
+two requests in one worker; service-reported inference runtime was about
+`0.512 s` for the first request and `0.013 s` for the second request, showing
+that the model/CUDA setup was reused.
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 1 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_persistent_service_smoke \
+  --thermal-cache
+```
+
+Result: passed in `8.12 s`; C++ started the persistent DeepOHeat service and
+completed two single-partition thermal evaluations.
+
+```bash
+./run_chiplet_test.sh 48_1_14_4_1600_1600 \
+  --seed 7 --thermal --thermal-budget 250 --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_refinement_persistent_real_smoke \
+  --thermal-cache
+```
+
+Result: passed in `203.39 s`. The run wrote `658` manifest records,
+`658` thermal result JSON files, and `658` field NPZ files under
+`/tmp/chipletpart_refinement_persistent_real_smoke`.
 
 GA100 refinement-thermal validation on 2026-05-14:
 

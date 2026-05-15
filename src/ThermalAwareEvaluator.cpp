@@ -4,9 +4,12 @@
 #include <array>
 #include <chrono>
 #include <cctype>
+#include <cerrno>
 #include <cmath>
+#include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -18,6 +21,9 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace chiplet {
 namespace {
@@ -972,7 +978,13 @@ ThermalResult MockThermalSurrogate::Predict(const ThermalInstance& instance,
 }
 
 PythonDeepOHeatAdapter::PythonDeepOHeatAdapter(ThermalConfig config)
-    : config_(std::move(config)) {}
+    : config_(std::move(config)) {
+  std::signal(SIGPIPE, SIG_IGN);
+}
+
+PythonDeepOHeatAdapter::~PythonDeepOHeatAdapter() {
+  StopService();
+}
 
 std::string PythonDeepOHeatAdapter::ShellQuote(const std::string& value) const {
   std::string quoted = "'";
@@ -985,6 +997,33 @@ std::string PythonDeepOHeatAdapter::ShellQuote(const std::string& value) const {
   }
   quoted += "'";
   return quoted;
+}
+
+std::string PythonDeepOHeatAdapter::JsonEscape(const std::string& value) const {
+  std::ostringstream os;
+  for (char c : value) {
+    switch (c) {
+      case '\\':
+        os << "\\\\";
+        break;
+      case '"':
+        os << "\\\"";
+        break;
+      case '\n':
+        os << "\\n";
+        break;
+      case '\r':
+        os << "\\r";
+        break;
+      case '\t':
+        os << "\\t";
+        break;
+      default:
+        os << c;
+        break;
+    }
+  }
+  return os.str();
 }
 
 std::string PythonDeepOHeatAdapter::ResolveInferenceScript() const {
@@ -1060,19 +1099,10 @@ std::string PythonDeepOHeatAdapter::ExtractJsonString(const std::string& json,
   return json.substr(pos + 1, end - pos - 1);
 }
 
-ThermalResult PythonDeepOHeatAdapter::Predict(const ThermalInstance&,
-                                              const std::string& instance_path) {
-  if (config_.thermal_model_path.empty()) {
-    throw std::runtime_error("[THERMAL] --thermal_model_path is required when "
-                             "--thermal_use_mock is not set");
-  }
-  if (instance_path.empty()) {
-    throw std::runtime_error("[THERMAL] DeepOHeat adapter requires dumped instance JSON");
-  }
-  const std::string script = ResolveInferenceScript();
-  const std::filesystem::path output_path =
-      std::filesystem::path(instance_path).replace_extension(".thermal_result.json");
-
+ThermalResult PythonDeepOHeatAdapter::PredictWithSubprocess(
+    const std::string& instance_path,
+    const std::filesystem::path& output_path,
+    const std::string& script) const {
   std::ostringstream cmd;
   cmd << ShellQuote(config_.python_executable)
       << " " << ShellQuote(script)
@@ -1109,6 +1139,238 @@ ThermalResult PythonDeepOHeatAdapter::Predict(const ThermalInstance&,
   result.t_avg = ExtractJsonNumber(json, "t_avg");
   result.field_path = ExtractJsonString(json, "field_path");
   return result;
+}
+
+void PythonDeepOHeatAdapter::StartService(const std::string& script) {
+  if (service_pid_ > 0 && service_script_ == script) {
+    return;
+  }
+  StopService();
+
+  int stdin_pipe[2] = {-1, -1};
+  int stdout_pipe[2] = {-1, -1};
+  if (pipe(stdin_pipe) != 0 || pipe(stdout_pipe) != 0) {
+    if (stdin_pipe[0] >= 0) {
+      close(stdin_pipe[0]);
+    }
+    if (stdin_pipe[1] >= 0) {
+      close(stdin_pipe[1]);
+    }
+    if (stdout_pipe[0] >= 0) {
+      close(stdout_pipe[0]);
+    }
+    if (stdout_pipe[1] >= 0) {
+      close(stdout_pipe[1]);
+    }
+    throw std::runtime_error("[THERMAL] Failed to create DeepOHeat service pipes: " +
+                             std::string(std::strerror(errno)));
+  }
+
+  const pid_t pid = fork();
+  if (pid < 0) {
+    close(stdin_pipe[0]);
+    close(stdin_pipe[1]);
+    close(stdout_pipe[0]);
+    close(stdout_pipe[1]);
+    throw std::runtime_error("[THERMAL] Failed to fork DeepOHeat service: " +
+                             std::string(std::strerror(errno)));
+  }
+
+  if (pid == 0) {
+    dup2(stdin_pipe[0], STDIN_FILENO);
+    dup2(stdout_pipe[1], STDOUT_FILENO);
+    close(stdin_pipe[0]);
+    close(stdin_pipe[1]);
+    close(stdout_pipe[0]);
+    close(stdout_pipe[1]);
+
+    std::vector<std::string> args;
+    args.push_back(config_.python_executable);
+    args.push_back(script);
+    args.push_back("--server");
+    args.push_back("--model");
+    args.push_back(config_.thermal_model_path);
+    if (!config_.thermal_model_config.empty()) {
+      args.push_back("--config");
+      args.push_back(config_.thermal_model_config);
+    }
+    if (!config_.thermal_device.empty()) {
+      args.push_back("--device");
+      args.push_back(config_.thermal_device);
+    }
+
+    std::vector<char*> argv;
+    argv.reserve(args.size() + 1);
+    for (auto& arg : args) {
+      argv.push_back(arg.data());
+    }
+    argv.push_back(nullptr);
+    execvp(config_.python_executable.c_str(), argv.data());
+    std::cerr << "[THERMAL] Failed to exec DeepOHeat service: "
+              << std::strerror(errno) << std::endl;
+    _exit(127);
+  }
+
+  close(stdin_pipe[0]);
+  close(stdout_pipe[1]);
+  service_pid_ = static_cast<int>(pid);
+  service_stdin_fd_ = stdin_pipe[1];
+  service_stdout_fd_ = stdout_pipe[0];
+  service_script_ = script;
+  std::cout << "[THERMAL] Started persistent DeepOHeat service pid="
+            << service_pid_ << " backend=" << config_.thermal_backend
+            << std::endl;
+}
+
+void PythonDeepOHeatAdapter::StopService() {
+  if (service_stdin_fd_ >= 0) {
+    const std::string shutdown = "{\"shutdown\":true}\n";
+    const char* data = shutdown.data();
+    size_t remaining = shutdown.size();
+    while (remaining > 0) {
+      const ssize_t written = write(service_stdin_fd_, data, remaining);
+      if (written < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        break;
+      }
+      data += written;
+      remaining -= static_cast<size_t>(written);
+    }
+    close(service_stdin_fd_);
+    service_stdin_fd_ = -1;
+  }
+  if (service_stdout_fd_ >= 0) {
+    close(service_stdout_fd_);
+    service_stdout_fd_ = -1;
+  }
+  if (service_pid_ > 0) {
+    int status = 0;
+    while (waitpid(static_cast<pid_t>(service_pid_), &status, 0) < 0 &&
+           errno == EINTR) {
+    }
+    service_pid_ = -1;
+  }
+  service_script_.clear();
+}
+
+void PythonDeepOHeatAdapter::WriteServiceLine(const std::string& line) {
+  if (service_stdin_fd_ < 0) {
+    throw std::runtime_error("[THERMAL] DeepOHeat service stdin is closed");
+  }
+  std::string payload = line;
+  if (payload.empty() || payload.back() != '\n') {
+    payload.push_back('\n');
+  }
+  const char* data = payload.data();
+  size_t remaining = payload.size();
+  while (remaining > 0) {
+    const ssize_t written = write(service_stdin_fd_, data, remaining);
+    if (written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      throw std::runtime_error("[THERMAL] Failed to write DeepOHeat service "
+                               "request: " +
+                               std::string(std::strerror(errno)));
+    }
+    if (written == 0) {
+      throw std::runtime_error("[THERMAL] DeepOHeat service write returned zero");
+    }
+    data += written;
+    remaining -= static_cast<size_t>(written);
+  }
+}
+
+std::string PythonDeepOHeatAdapter::ReadServiceLine() {
+  if (service_stdout_fd_ < 0) {
+    throw std::runtime_error("[THERMAL] DeepOHeat service stdout is closed");
+  }
+  std::string line;
+  char ch = '\0';
+  while (true) {
+    const ssize_t count = read(service_stdout_fd_, &ch, 1);
+    if (count < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      throw std::runtime_error("[THERMAL] Failed to read DeepOHeat service "
+                               "response: " +
+                               std::string(std::strerror(errno)));
+    }
+    if (count == 0) {
+      throw std::runtime_error("[THERMAL] DeepOHeat service exited before "
+                               "returning a response");
+    }
+    if (ch == '\n') {
+      if (line.find("\"ok\"") != std::string::npos) {
+        return line;
+      }
+      line.clear();
+      continue;
+    }
+    line.push_back(ch);
+    if (line.size() > 1024 * 1024) {
+      throw std::runtime_error("[THERMAL] DeepOHeat service response line is "
+                               "too large");
+    }
+  }
+}
+
+ThermalResult PythonDeepOHeatAdapter::PredictWithPersistentService(
+    const std::string& instance_path,
+    const std::filesystem::path& output_path,
+    const std::string& script) {
+  StartService(script);
+  std::ostringstream request;
+  request << "{\"instance\":\"" << JsonEscape(instance_path)
+          << "\",\"output\":\"" << JsonEscape(output_path.string())
+          << "\",\"dump_field\":"
+          << (config_.thermal_backend == "package_thermal" ? "true" : "false")
+          << "}";
+  WriteServiceLine(request.str());
+  const std::string response = ReadServiceLine();
+  if (response.find("\"ok\": true") == std::string::npos &&
+      response.find("\"ok\":true") == std::string::npos) {
+    const std::string error = ExtractJsonString(response, "error");
+    throw std::runtime_error("[THERMAL] DeepOHeat service inference failed: " +
+                             (error.empty() ? response : error));
+  }
+
+  ThermalResult result;
+  result.t_max = ExtractJsonNumber(response, "t_max");
+  result.t_avg = ExtractJsonNumber(response, "t_avg");
+  result.field_path = ExtractJsonString(response, "field_path");
+  return result;
+}
+
+ThermalResult PythonDeepOHeatAdapter::Predict(const ThermalInstance&,
+                                              const std::string& instance_path) {
+  if (config_.thermal_model_path.empty()) {
+    throw std::runtime_error("[THERMAL] --thermal_model_path is required when "
+                             "--thermal_use_mock is not set");
+  }
+  if (instance_path.empty()) {
+    throw std::runtime_error("[THERMAL] DeepOHeat adapter requires dumped instance JSON");
+  }
+  const std::string script = ResolveInferenceScript();
+  const std::filesystem::path output_path =
+      std::filesystem::path(instance_path).replace_extension(".thermal_result.json");
+
+  if (!service_disabled_) {
+    try {
+      return PredictWithPersistentService(instance_path, output_path, script);
+    } catch (const std::exception& e) {
+      StopService();
+      service_disabled_ = true;
+      std::cerr << "[THERMAL] Warning: persistent DeepOHeat service unavailable ("
+                << e.what() << "); falling back to per-call subprocess"
+                << std::endl;
+    }
+  }
+
+  return PredictWithSubprocess(instance_path, output_path, script);
 }
 
 ThermalAwareEvaluator::ThermalAwareEvaluator(ThermalConfig config,

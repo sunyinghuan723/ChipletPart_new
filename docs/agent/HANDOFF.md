@@ -21,9 +21,11 @@ revalidation.
 
 ## Current Task
 
-Most recent user-requested milestone pushed thermal objective evaluation deeper
-into ChipletPart partition refinement and validated the change on GA100 under
-`/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
+Most recent user-requested milestone reduced DeepOHeat invocation overhead in
+thermal refinement by replacing repeated Python subprocess launches with a
+persistent Python service path. The previous milestone pushed thermal objective
+evaluation deeper into ChipletPart partition refinement and validated the
+change on GA100 under `/home/yhsun/Chiplet-Partitioning/experiment_v2_ga100`.
 
 Homogeneous thermal mode now wires `ThermalAwareEvaluator` into the FM/KL
 refiners. After fast and standard floorplanner calls, the refiner refreshes the
@@ -40,6 +42,13 @@ thermal placement for heterogeneous mode.
 Default per-candidate cost and thermal objective logging is quiet to keep the
 larger thermal runs manageable. Re-enable it with
 `CHIPLET_PART_VERBOSE_COST=1` and/or `CHIPLET_PART_VERBOSE_THERMAL=1`.
+
+DeepOHeat real inference now defaults to a persistent worker inside
+`PythonDeepOHeatAdapter`: the C++ evaluator starts one Python process per
+evaluator, sends JSON-line requests over pipes, and keeps Python imports, model
+weights, eval mesh/coords, and CUDA context alive across FM/KL move/swap
+evaluations. If the worker cannot start or exits, C++ falls back to the old
+per-call subprocess path.
 
 The broader project priority remains the paper-scale `package_thermal` path:
 more reliable data, stronger labels, training, experiment automation,
@@ -62,8 +71,9 @@ revalidation, and paper-ready figures/tables.
 - Preserve the cost-only path.
 - When `--enable_thermal` is not set, use the original cost-only flow.
 - Keep `--thermal_use_mock` for quick debugging.
-- C++ to DeepOHeat currently uses a Python subprocess; future options include a
-  persistent server, batch inference, ONNX, or LibTorch.
+- C++ to DeepOHeat now uses a persistent Python worker when possible, with the
+  old subprocess call retained as fallback. Future options include batched
+  inference, ONNX, or LibTorch.
 - The latest user instruction requires updating agent files and making a local
   git commit after each verifiable milestone. Do not push.
 
@@ -78,8 +88,9 @@ surrogate.
 
 The legacy 2D adapter at `DeepOHeat/scripts/infer_package.py` now supports
 `--device auto`, preserves absolute power-map magnitude by default, accepts an
-optional config JSON / `--power_scale` / `--normalize_power`, and writes a
-small `.field.npz` next to each `.thermal_result.json`.
+optional config JSON / `--power_scale` / `--normalize_power`, writes a small
+`.field.npz` next to each `.thermal_result.json`, and supports `--server` for
+JSON-line persistent inference.
 
 The current project adds `DeepOHeat/package_thermal/`. The package-level
 surrogate follows:
@@ -91,7 +102,8 @@ G_theta(X, y) -> T(y)
 `X` is the multi-channel package tensor dumped by ChipletPart. `y` is a
 normalized coordinate. The branch network encodes the package tensor, the trunk
 network encodes the coordinate, and the model predicts the temperature field
-from which `T_max` and `T_avg` are extracted.
+from which `T_max` and `T_avg` are extracted. Its inference script also
+supports `--server` and caches normalized coordinate tensors by grid shape.
 
 ### ChipletPart
 
@@ -149,6 +161,36 @@ training/evaluation because earlier sessions saw driver/PyTorch CUDA
 unavailable.
 
 ## Completed Content
+
+### 2026-05-15: Persistent DeepOHeat Inference Service
+
+- Added a persistent service path to `PythonDeepOHeatAdapter`.
+- The C++ adapter starts one long-running Python worker per
+  `ThermalAwareEvaluator`, sends JSON-line requests through POSIX pipes, reads
+  JSON-line responses, and stops the worker in the adapter destructor.
+- The old per-call subprocess command remains as fallback if the persistent
+  worker cannot be used.
+- `DeepOHeat/scripts/infer_package.py` now has `Legacy2DPowerMapPredictor`,
+  which loads DeepOHeat modules, checkpoint, model, eval mesh, and CUDA context
+  once and reuses them for multiple requests.
+- `DeepOHeat/package_thermal/infer_package.py` now has
+  `PackageThermalPredictor`, which keeps the model loaded and caches normalized
+  coordinate tensors by `(grid_y, grid_x)`.
+- The C++ path ignores `SIGPIPE` so a crashed worker returns an error instead
+  of terminating `chipletPart`.
+- Validation on 2026-05-15 passed:
+  `python3 -m py_compile` for both inference scripts,
+  `cmake --build build --target chipletPart thermal_mvp_test -j 4`,
+  `ctest -R thermal_mvp_test --output-on-failure`,
+  `tests/thermal/test_thermal_pipeline.py`, direct legacy service inference,
+  a GA100 C++ service smoke, and a real
+  `48_1_14_4_1600_1600` refinement thermal smoke.
+- Direct legacy service inference on one archived GA100 instance processed two
+  requests in one Python worker; service-reported runtime was about `0.512 s`
+  for the first request and `0.013 s` for the second request.
+- The real refinement smoke wrote `658` thermal records under
+  `/tmp/chipletpart_refinement_persistent_real_smoke` and completed in
+  `203.39 s`.
 
 ### 2026-05-05: Automatic Thermal Figure Generation
 
@@ -461,6 +503,80 @@ it is still single-benchmark and not a final paper-scale dataset.
 
 ## Recent Validation
 
+Persistent DeepOHeat service validation on 2026-05-15:
+
+```bash
+python3 -m py_compile \
+  DeepOHeat/scripts/infer_package.py \
+  DeepOHeat/package_thermal/infer_package.py
+```
+
+Result: passed.
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test -j 4
+```
+
+Result: passed. The build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
+
+```bash
+cd build
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed.
+
+```bash
+/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+  tests/thermal/test_thermal_pipeline.py
+```
+
+Result: passed, 13 tests.
+
+```bash
+nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv,noheader
+```
+
+Result: two NVIDIA GeForce RTX 4090 GPUs visible with driver `570.124.06`.
+The DeepOHeat PyTorch environment reported CUDA available and two visible
+CUDA devices.
+
+Direct legacy persistent-service smoke on an archived GA100 instance:
+
+- Command shape:
+  `python DeepOHeat/scripts/infer_package.py --server --model <2d checkpoint>
+  --device auto`, with two JSON-line requests piped on stdin.
+- Result: passed.
+- Service-reported inference runtime: first request about `0.512 s`, second
+  request about `0.013 s`.
+- Total elapsed including Python/Torch/model/CUDA startup for two requests:
+  `5.33 s`.
+
+GA100 C++ service smoke:
+
+```bash
+./run_chiplet_test.sh ga100 \
+  --tech-enum --tech-nodes 7nm,14nm --max-partitions 1 \
+  --seed 42 --thermal --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_persistent_service_smoke \
+  --thermal-cache
+```
+
+Result: passed in `8.12 s`.
+
+Real refinement thermal smoke:
+
+```bash
+./run_chiplet_test.sh 48_1_14_4_1600_1600 \
+  --seed 7 --thermal --thermal-budget 250 --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_refinement_persistent_real_smoke \
+  --thermal-cache
+```
+
+Result: passed in `203.39 s`. Output contained `658` manifest records,
+`658` thermal result JSON files, and `658` field NPZ files.
+
 Dataset V3 pilot validation on 2026-05-04:
 
 ```bash
@@ -730,7 +846,10 @@ Revalidation:
    paper claims.
 4. Surrogate error remains large on final candidates and has not yet been
    retested with Dataset V3 training.
-5. Subprocess inference is usable but not ideal for large sweeps.
+5. Persistent inference removes repeated Python/model startup, but legacy
+   refinement still writes one compressed field NPZ per evaluated move/swap.
+   Metrics-only refinement plus final/top-candidate field dumps would likely
+   reduce runtime and disk I/O further.
 6. Paper-scale experiments are still missing.
 7. Only `cuda:0` received an end-to-end smoke in the latest check. `cuda:1` was
    visible via PyTorch but not separately smoked.
@@ -759,17 +878,20 @@ Revalidation:
 
 ## Next Suggested Steps
 
-1. Train a small package_thermal surrogate on
+1. Add a metrics-only thermal refinement mode or top-candidate-only field dump
+   policy to avoid writing hundreds of field NPZ files during move/swap
+   scoring.
+2. Train a small package_thermal surrogate on
    `/tmp/chipletpart_thermal_dataset_v3_pilot/manifest_train.jsonl`,
    validate on `manifest_val.jsonl`, and test on `manifest_test.jsonl`, or
    decide to improve reference labels first based on the pilot label summary.
-2. Compare Dataset V3 pilot surrogate metrics against the prior Dataset V2
+3. Compare Dataset V3 pilot surrogate metrics against the prior Dataset V2
    surrogate metrics.
-3. Improve reference label generation or add a calibrated external solver path.
-4. Expand Dataset V3 beyond one benchmark only after the small surrogate/label
+4. Improve reference label generation or add a calibrated external solver path.
+5. Expand Dataset V3 beyond one benchmark only after the small surrogate/label
    sanity check.
-5. Run budget sweeps and lambda ablations with final-candidate revalidation.
-6. Recheck GPU state before any long training/evaluation run.
+6. Run budget sweeps and lambda ablations with final-candidate revalidation.
+7. Recheck GPU state before any long training/evaluation run.
 
 ## New Session Checklist
 

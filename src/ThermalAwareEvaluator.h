@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -145,16 +146,34 @@ private:
 class PythonDeepOHeatAdapter : public ThermalSurrogate {
 public:
   explicit PythonDeepOHeatAdapter(ThermalConfig config);
+  ~PythonDeepOHeatAdapter() override;
   ThermalResult Predict(const ThermalInstance& instance,
                         const std::string& instance_path) override;
 
 private:
+  ThermalResult PredictWithSubprocess(const std::string& instance_path,
+                                      const std::filesystem::path& output_path,
+                                      const std::string& script) const;
+  ThermalResult PredictWithPersistentService(
+      const std::string& instance_path,
+      const std::filesystem::path& output_path,
+      const std::string& script);
+  void StartService(const std::string& script);
+  void StopService();
+  void WriteServiceLine(const std::string& line);
+  std::string ReadServiceLine();
   std::string ResolveInferenceScript() const;
   std::string ShellQuote(const std::string& value) const;
+  std::string JsonEscape(const std::string& value) const;
   double ExtractJsonNumber(const std::string& json, const std::string& key) const;
   std::string ExtractJsonString(const std::string& json, const std::string& key) const;
 
   ThermalConfig config_;
+  int service_pid_ = -1;
+  int service_stdin_fd_ = -1;
+  int service_stdout_fd_ = -1;
+  std::string service_script_;
+  bool service_disabled_ = false;
 };
 
 class ThermalAwareEvaluator {
