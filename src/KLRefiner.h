@@ -50,11 +50,7 @@ public:
   // Setter methods for parameters
   void SetMaxSwaps(int max_swaps) { max_swaps_ = max_swaps; }
   void SetRefinerIters(int refiner_iters) { refiner_iters_ = refiner_iters; }
-  void SetFloorplannerParams(int num_workers, int max_steps, int perturbations) {
-    num_fp_workers_ = num_workers;
-    max_fp_steps_ = max_steps;
-    max_fp_perturbations_ = perturbations;
-  }
+  void SetFloorplannerParams(int num_workers, int max_steps, int perturbations);
   
   // Set weight scale factor for normalizing gain calculations
   void SetWeightScaleFactor(float scale) { weight_scale_factor_ = scale; }

@@ -33,6 +33,9 @@
 
 #include "GeneticTechPartitioner.h"
 #include "Console.h" // For console output utilities
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 namespace chiplet {
 
@@ -261,6 +264,12 @@ GeneticSolution GeneticTechPartitioner::Run(
         }
         continue;
       }
+
+#ifdef __GLIBC__
+      // Release large freed heap spans between expensive fitness evaluations
+      // so long GA runs do not keep monotonically growing RSS.
+      malloc_trim(0);
+#endif
 
       // std::cout << "Evaluating solution " << i + 1 << " with cost: " << cost
       // << std::endl;

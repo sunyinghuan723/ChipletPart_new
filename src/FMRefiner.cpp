@@ -54,6 +54,7 @@
 #include <stack>
 #include <string>
 #include <thread>
+#include <cstdlib>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -65,6 +66,21 @@
 #include "OpenMPSupport.h"
 
 namespace chiplet {
+
+namespace {
+
+int PositiveEnvOrDefault(const char* name, int fallback) {
+  if (const char* raw = std::getenv(name)) {
+    char* end = nullptr;
+    const long value = std::strtol(raw, &end, 10);
+    if (end != raw && end != nullptr && *end == '\0' && value > 0) {
+      return static_cast<int>(value);
+    }
+  }
+  return fallback;
+}
+
+}  // namespace
 
 // VertexGain constructor is already defined in PriorityQueue.h
 // Remove duplicate definition
@@ -270,11 +286,10 @@ ChipletRefiner::Floorplanner(int max_steps, int perturbations,
       std::iota(neg_seq.begin(), neg_seq.end(), 0);
     }
     
-    // SIMPLIFIED: Use just a single worker to avoid memory issues
-    int available_threads = omp_utils::get_max_threads();
-    
-    // Force at least 2 workers for testing multi-worker mode
-    const int num_workers = std::max(2, std::min(num_threads_, 4));
+    // Allow experiments to clamp floorplanner workers without changing
+    // repository-wide defaults.
+    const int num_workers = PositiveEnvOrDefault(
+        "CHIPLETPART_FM_FP_WORKERS", std::max(2, std::min(num_threads_, 4)));
     
     // Create vector of worker instances
     std::vector<std::unique_ptr<SACore>> workers;

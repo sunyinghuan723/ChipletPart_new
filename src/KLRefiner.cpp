@@ -39,6 +39,7 @@
 #include "OpenMPSupport.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -46,6 +47,21 @@
 #include <unordered_set>
 
 namespace chiplet {
+
+namespace {
+
+int PositiveEnvOrDefault(const char* name, int fallback) {
+  if (const char* raw = std::getenv(name)) {
+    char* end = nullptr;
+    const long value = std::strtol(raw, &end, 10);
+    if (end != raw && end != nullptr && *end == '\0' && value > 0) {
+      return static_cast<int>(value);
+    }
+  }
+  return fallback;
+}
+
+}  // namespace
 
 // Utility function to calculate block balance (similar to FMRefiner)
 Matrix<float> GetBlockBalance(const HGraphPtr& hgraph, const Partition& solution) {
@@ -109,7 +125,17 @@ KLRefiner::KLRefiner(int num_parts, int refiner_iters, int max_swaps, bool floor
   
   // Get available threads for parallel processing
   int available_threads = omp_utils::get_max_threads();
-  num_fp_workers_ = std::max(2, std::min(available_threads / 2, 4));
+  num_fp_workers_ = PositiveEnvOrDefault(
+      "CHIPLETPART_KL_FP_WORKERS",
+      std::max(2, std::min(available_threads / 2, 4)));
+}
+
+void KLRefiner::SetFloorplannerParams(int num_workers, int max_steps,
+                                      int perturbations) {
+  num_fp_workers_ =
+      PositiveEnvOrDefault("CHIPLETPART_KL_FP_WORKERS", num_workers);
+  max_fp_steps_ = max_steps;
+  max_fp_perturbations_ = perturbations;
 }
 
 // Main refinement method
