@@ -6,6 +6,7 @@ namespace chiplet {
 
 struct ThermalConfig {
   bool enable_thermal = false;
+  bool thermal_post_eval_only = false;
   bool use_mock_thermal_model = false;
   bool thermal_cache_enable = false;
   bool allow_thermal_fallback = false;

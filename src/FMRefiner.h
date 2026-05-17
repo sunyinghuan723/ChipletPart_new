@@ -136,6 +136,12 @@ public:
     y_locations_ = y_locations;
   }
 
+  const std::vector<float>& GetAspectRatios() const { return aspect_ratios_; }
+
+  const std::vector<float>& GetXLocations() const { return x_locations_; }
+
+  const std::vector<float>& GetYLocations() const { return y_locations_; }
+
   void SetNumParts(int num_parts) { num_parts_ = num_parts; }
 
   void SetReach(float reach) { reach_ = reach; }

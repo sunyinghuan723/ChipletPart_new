@@ -106,7 +106,7 @@ void displayHeader() {
 void displayUsage(const char* programName) {
   std::cout << "Usage: " << programName << " [options] <arguments>" << std::endl;
   std::cout << "Standard mode: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node> [--seed <value>]" << std::endl;
-  std::cout << "Evaluation mode: " << programName << " <partition_file> <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node> [--seed <value>]" << std::endl;
+  std::cout << "Evaluation mode: " << programName << " <partition_file> <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node_or_tech_file> [--seed <value>]" << std::endl;
   std::cout << "Canonical GA: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> --canonical-ga --tech-nodes <list> [--seed <value>] [--generations <value>] [--population <value>]" << std::endl;
   std::cout << "Tech Enumeration: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> --tech-enum --tech-nodes <list> [--max-partitions <value>] [--detailed-output] [--seed <value>]" << std::endl;
   std::cout << "Options:" << std::endl;
@@ -129,6 +129,7 @@ void displayUsage(const char* programName) {
   std::cout << "  --thermal_ambient <float> : Ambient temperature in Kelvin" << std::endl;
   std::cout << "  --thermal_htc <float> : Heat-transfer coefficient" << std::endl;
   std::cout << "  --thermal_use_mock    : Use deterministic mock thermal surrogate" << std::endl;
+  std::cout << "  --thermal_post_eval_only : Keep search cost-only and thermal-evaluate only the final best candidate" << std::endl;
   std::cout << "  --thermal_dump_instances <dir> : Dump thermal instance JSON files" << std::endl;
   std::cout << "  --thermal_dump_manifest <path> : Append thermal instance manifest JSONL" << std::endl;
   std::cout << "  --thermal_dump_prefix <name> : Prefix for dumped instance IDs/files" << std::endl;
@@ -283,6 +284,8 @@ bool isFlagOption(const std::string& option) {
          option == "--tech-enum" ||
          option == "--detailed-output" ||
          option == "--enable_thermal" ||
+         option == "--thermal_post_eval_only" ||
+         option == "--thermal-post-eval-only" ||
          option == "--thermal_use_mock" ||
          option == "--thermal_cache" ||
          option == "--thermal_allow_fallback";
@@ -307,6 +310,9 @@ std::vector<std::string> collectPositionalArgs(int argc, char* argv[]) {
 chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   chiplet::ThermalConfig config;
   config.enable_thermal = hasFlag(argc, argv, "--enable_thermal");
+  config.thermal_post_eval_only =
+      hasFlag(argc, argv, "--thermal_post_eval_only") ||
+      hasFlag(argc, argv, "--thermal-post-eval-only");
   config.use_mock_thermal_model = hasFlag(argc, argv, "--thermal_use_mock");
   config.thermal_cache_enable = hasFlag(argc, argv, "--thermal_cache");
   config.allow_thermal_fallback = hasFlag(argc, argv, "--thermal_allow_fallback");
@@ -670,7 +676,11 @@ int main(int argc, char *argv[]) {
     chiplet::ThermalConfig thermal_config = parseThermalConfig(argc, argv);
     chiplet_part->SetThermalConfig(thermal_config);
     if (thermal_config.enable_thermal) {
-      Console::Info("[THERMAL] Enabled thermal-aware objective");
+      if (thermal_config.thermal_post_eval_only) {
+        Console::Info("[THERMAL] Enabled final-best-candidate post-evaluation only");
+      } else {
+        Console::Info("[THERMAL] Enabled thermal-aware objective");
+      }
       Console::Info("[THERMAL] backend=" +
                     (thermal_config.use_mock_thermal_model ? std::string("mock")
                                                             : thermal_config.thermal_backend) +

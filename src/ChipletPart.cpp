@@ -1267,7 +1267,11 @@ void ChipletPart::GeneticTechPart(
   
   // Set the pointer to this ChipletPart instance for advanced partitioning methods
   partitioner.SetChipletPart(this);
-  partitioner.SetThermalConfig(thermal_config_);
+  ThermalConfig search_thermal_config = thermal_config_;
+  if (search_thermal_config.thermal_post_eval_only) {
+    search_thermal_config.enable_thermal = false;
+  }
+  partitioner.SetThermalConfig(search_thermal_config);
   
   // Run the genetic algorithm
   Console::Info("Running genetic algorithm...");
@@ -1298,6 +1302,42 @@ void ChipletPart::GeneticTechPart(
   Console::TableRow({"Valid Solution", solution.valid ? "Yes" : "No"}, widths);
   Console::TableRow({"Execution Time (seconds)", std::to_string(duration)}, widths);
   std::cout << std::endl;
+
+  if (thermal_config_.enable_thermal && thermal_config_.thermal_post_eval_only) {
+    const bool stored_floorplan_ready =
+        solution.floorplan_success &&
+        solution.aspect_ratios.size() >= static_cast<size_t>(solution.num_partitions) &&
+        solution.x_locations.size() >= static_cast<size_t>(solution.num_partitions) &&
+        solution.y_locations.size() >= static_cast<size_t>(solution.num_partitions);
+    if (stored_floorplan_ready) {
+      ThermalAwareEvaluator post_eval_evaluator(
+          thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+      auto thermal_eval = post_eval_evaluator.Evaluate(
+          solution.cost,
+          solution.partition,
+          solution.tech_nodes,
+          solution.aspect_ratios,
+          solution.x_locations,
+          solution.y_locations,
+          true);
+      Console::Subheader("Post-eval Thermal Results");
+      Console::TableHeader(columns, widths);
+      Console::TableRow(
+          {"Thermal T_max", std::to_string(thermal_eval.thermal.t_max)},
+          widths);
+      Console::TableRow(
+          {"Thermal T_avg", std::to_string(thermal_eval.thermal.t_avg)},
+          widths);
+      Console::TableRow(
+          {"Thermal penalty", std::to_string(thermal_eval.peak_penalty + thermal_eval.avg_penalty)},
+          widths);
+      std::cout << std::endl;
+    } else {
+      Console::Warning(
+          "Skipping post-eval thermal evaluation because no final floorplan "
+          "state was preserved for the best genetic solution.");
+    }
+  }
   
   // Save results to files
   output_prefix = chiplet_netlist_file + "." + output_prefix;
@@ -1824,9 +1864,11 @@ void ChipletPart::Partition(
   
   // Mutex for thread-safe access to the results vector
   std::mutex results_mutex;
+  const bool thermal_search_enabled =
+      thermal_config_.enable_thermal && !thermal_config_.thermal_post_eval_only;
 
   std::shared_ptr<ThermalAwareEvaluator> thermal_evaluator;
-  if (thermal_config_.enable_thermal) {
+  if (thermal_search_enabled) {
     thermal_evaluator = std::make_shared<ThermalAwareEvaluator>(
         thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
     Console::Info("[THERMAL] Thermal-aware partition ranking is enabled");
@@ -2251,6 +2293,16 @@ void ChipletPart::Partition(
         } catch (...) {
           Console::Error("Unknown exception in KL refinement");
         }
+
+        if (!thread_refiner->GetAspectRatios().empty()) {
+          result_aspect_ratios = thread_refiner->GetAspectRatios();
+        }
+        if (!thread_refiner->GetXLocations().empty()) {
+          result_x_locations = thread_refiner->GetXLocations();
+        }
+        if (!thread_refiner->GetYLocations().empty()) {
+          result_y_locations = thread_refiner->GetYLocations();
+        }
         
         int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
         if (thermal_evaluator && thermal_evaluator->Enabled() && floorplanning) {
@@ -2367,7 +2419,7 @@ void ChipletPart::Partition(
     Console::TableRow({"Partition index", std::to_string(best_result.partition_idx)}, result_widths);
     Console::TableRow({"Number of parts", std::to_string(best_result.num_parts)}, result_widths);
     Console::TableRow({"Cost", std::to_string(best_result.cost)}, result_widths);
-    if (thermal_config_.enable_thermal) {
+    if (thermal_search_enabled) {
       Console::TableRow({"Base cost", std::to_string(best_result.base_cost)}, result_widths);
       Console::TableRow({"Thermal T_max", std::to_string(best_result.thermal_t_max)}, result_widths);
       Console::TableRow({"Thermal T_avg", std::to_string(best_result.thermal_t_avg)}, result_widths);
@@ -2406,10 +2458,48 @@ void ChipletPart::Partition(
     refiner->SetXLocations(best_result.x_locations);
     refiner->SetYLocations(best_result.y_locations);
     std::vector<int> best_partition = best_result.partition;
-    auto floor_result = refiner->RunFloorplanner(
-      best_partition, hypergraph_, 10000, 10000, 0.00001);
-      std::string success = std::get<3>(floor_result) ? "Yes" : "No";
-    Console::Info("Floorplanner results: " + success);
+    const bool stored_floorplan_ready =
+        best_result.valid &&
+        best_result.aspect_ratios.size() >= static_cast<size_t>(best_result.num_parts) &&
+        best_result.x_locations.size() >= static_cast<size_t>(best_result.num_parts) &&
+        best_result.y_locations.size() >= static_cast<size_t>(best_result.num_parts);
+    std::string success = stored_floorplan_ready ? "Yes" : "No";
+    Console::Info(
+        std::string(thermal_config_.thermal_post_eval_only
+                        ? "Stored floorplanner results: "
+                        : "Floorplanner results: ") +
+        success);
+    if (thermal_config_.enable_thermal && thermal_config_.thermal_post_eval_only) {
+      if (stored_floorplan_ready) {
+        ThermalAwareEvaluator post_eval_evaluator(
+            thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
+        std::vector<std::string> post_eval_tech(best_result.num_parts, tech);
+        auto thermal_eval = post_eval_evaluator.Evaluate(
+            best_result.cost,
+            best_partition,
+            post_eval_tech,
+            best_result.aspect_ratios,
+            best_result.x_locations,
+            best_result.y_locations,
+            true);
+        Console::Subheader("Post-eval Thermal Results");
+        Console::TableHeader(result_columns, result_widths);
+        Console::TableRow(
+            {"Thermal T_max", std::to_string(thermal_eval.thermal.t_max)},
+            result_widths);
+        Console::TableRow(
+            {"Thermal T_avg", std::to_string(thermal_eval.thermal.t_avg)},
+            result_widths);
+        Console::TableRow(
+            {"Thermal penalty", std::to_string(thermal_eval.peak_penalty + thermal_eval.avg_penalty)},
+            result_widths);
+        std::cout << std::endl;
+      } else {
+        Console::Warning(
+            "Skipping post-eval thermal evaluation because no final floorplan "
+            "state was preserved for the best partition.");
+      }
+    }
 
     std::string partition_file = chiplet_netlist_file + ".cpart." + std::to_string(best_result.num_parts);
 
@@ -2467,6 +2557,28 @@ void ChipletPart::EvaluatePartition(
     std::string chiplet_assembly_process_file, std::string chiplet_test_file,
     std::string chiplet_netlist_file, std::string chiplet_blocks_file,
     float reach, float separation, std::string tech) {
+  std::vector<std::string> tech_array;
+  const std::filesystem::path tech_path(tech);
+  if (std::filesystem::is_regular_file(tech_path)) {
+    std::ifstream tech_input(tech_path);
+    if (!tech_input.is_open()) {
+      std::cerr << "Error: Cannot open technology assignment file "
+                << tech << std::endl;
+      return;
+    }
+    std::string tech_name;
+    while (std::getline(tech_input, tech_name)) {
+      if (!tech_name.empty()) {
+        tech_array.push_back(tech_name);
+      }
+    }
+    if (tech_array.empty()) {
+      std::cerr << "Error: Technology assignment file is empty: "
+                << tech << std::endl;
+      return;
+    }
+  }
+
   std::cout << "[INFO] Reading chiplet files and generating hypergraph representation" << std::endl;
   std::cout << "[INFO] Partition file: " << hypergraph_part << std::endl;
   std::cout << "[INFO] IO file: " << chiplet_io_file << std::endl;
@@ -2478,7 +2590,11 @@ void ChipletPart::EvaluatePartition(
   std::cout << "[INFO] Blocks file: " << chiplet_blocks_file << std::endl;
   std::cout << "[INFO] Reach: " << reach << std::endl;
   std::cout << "[INFO] Separation: " << separation << std::endl;
-  std::cout << "[INFO] Tech: " << tech << std::endl;
+  if (tech_array.empty()) {
+    std::cout << "[INFO] Tech: " << tech << std::endl;
+  } else {
+    std::cout << "[INFO] Tech assignment file: " << tech << std::endl;
+  }
 
   // Generate the hypergraph from XML files
   ReadChipletGraphFromXML(chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
@@ -2562,7 +2678,14 @@ void ChipletPart::EvaluatePartition(
   refiner->SetAspectRatios(result_aspect_ratios);
   refiner->SetXLocations(result_x_locations);
   refiner->SetYLocations(result_y_locations);
-  std::vector<std::string> tech_array(num_parts_, tech);
+  if (tech_array.empty()) {
+    tech_array.assign(num_parts_, tech);
+  } else if (static_cast<int>(tech_array.size()) != num_parts_) {
+    std::cerr << "Error: Technology assignment file contains "
+              << tech_array.size() << " entries, but partition has "
+              << num_parts_ << " parts." << std::endl;
+    return;
+  }
   refiner->SetTechArray(tech_array);
         
   // Run refinement

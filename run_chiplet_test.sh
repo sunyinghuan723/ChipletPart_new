@@ -47,6 +47,8 @@ show_help() {
     echo "                        Directory for generated thermal PNG figures when plotting is enabled"
     echo "  --thermal-allow-fallback"
     echo "                        Fall back to cost-only objective if thermal inference fails"
+    echo "  --thermal-post-eval-only"
+    echo "                        Keep search cost-only and thermal-evaluate only the final best candidate"
     echo "  --help                Display this help message"
     echo
     echo "Examples:"
@@ -104,6 +106,7 @@ THERMAL_FIGURE_DIR=""
 THERMAL_PLOT_FIGURES=false
 THERMAL_CACHE=false
 THERMAL_ALLOW_FALLBACK=false
+THERMAL_POST_EVAL_ONLY=false
 
 # Parse command line arguments
 while [ "$#" -gt 0 ]; do
@@ -239,6 +242,11 @@ while [ "$#" -gt 0 ]; do
             THERMAL_ALLOW_FALLBACK=true
             shift
             ;;
+        --thermal-post-eval-only|--thermal_post_eval_only)
+            ENABLE_THERMAL=true
+            THERMAL_POST_EVAL_ONLY=true
+            shift
+            ;;
         *)
             echo -e "${RED}Error: Unknown option: $1${NC}"
             show_help
@@ -362,8 +370,14 @@ if [ "$ENABLE_THERMAL" = true ]; then
     if [ "$THERMAL_ALLOW_FALLBACK" = true ]; then
         THERMAL_ARGS+=(--thermal_allow_fallback)
     fi
+    if [ "$THERMAL_POST_EVAL_ONLY" = true ]; then
+        THERMAL_ARGS+=(--thermal_post_eval_only)
+    fi
 
     echo -e "${CYAN}Thermal-aware evaluation enabled${NC}"
+    if [ "$THERMAL_POST_EVAL_ONLY" = true ]; then
+        echo -e "${BLUE}Thermal mode: final-best-candidate post-eval only${NC}"
+    fi
     echo -e "${BLUE}Thermal backend: ${THERMAL_BACKEND}${NC}"
     echo -e "${BLUE}Thermal model: ${THERMAL_MODEL_PATH}${NC}"
     echo -e "${BLUE}Thermal Python: ${THERMAL_PYTHON}${NC}"

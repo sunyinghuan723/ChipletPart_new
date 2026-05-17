@@ -633,6 +633,10 @@ void GeneticTechPartitioner::InitializePopulation(
       }
       GeneticSolution solution(num_parts, partition, tech_assignment, cost,
                                success);
+      solution.floorplan_success = success;
+      solution.aspect_ratios = refiner_->GetAspectRatios();
+      solution.x_locations = refiner_->GetXLocations();
+      solution.y_locations = refiner_->GetYLocations();
       population_.push_back(solution);
     }
   }
@@ -952,6 +956,10 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
       }
 
       // Update solution
+      solution.floorplan_success = success;
+      solution.aspect_ratios = refiner_->GetAspectRatios();
+      solution.x_locations = refiner_->GetXLocations();
+      solution.y_locations = refiner_->GetYLocations();
       solution.valid = success;
       
       // CRITICAL CHANGE: Ensure invalid solutions have maximum cost

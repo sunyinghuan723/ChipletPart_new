@@ -66,6 +66,10 @@ struct GeneticSolution {
     std::vector<std::string> tech_nodes;  // Partition→technology assignments
     float cost;                           // Cached cost value
     bool valid;                           // Is the solution valid?
+    bool floorplan_success = false;       // Whether a floorplan state was preserved
+    std::vector<float> aspect_ratios;     // Preserved floorplan aspect ratios
+    std::vector<float> x_locations;       // Preserved floorplan x locations
+    std::vector<float> y_locations;       // Preserved floorplan y locations
 
     GeneticSolution() : num_partitions(0), cost(std::numeric_limits<float>::max()), valid(false) {}
     
