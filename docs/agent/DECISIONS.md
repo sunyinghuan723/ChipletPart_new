@@ -364,3 +364,28 @@ methodology, or experiment-policy decision is made.
   separated negative-coordinate geometry after translation. A real EPYC
   cost-only post-evaluation now completes with one field and reports
   `base=84.825104`, `T_max=307.117035 K`, `T_avg=301.992432 K`.
+
+## ADR-0020: Floorplan Hierarchical Benchmarks Using Mapped Detailed Areas
+
+- Date: 2026-05-24
+- Decision: When a benchmark has more detailed block definitions than netlist
+  partition vertices, floorplanning must accumulate the detailed block areas
+  through the same block-to-vertex mapping used by thermal encoding.
+- Status: Accepted
+- Context: GA100 maps 179 power/area records onto 45 netlist vertices.
+  Thermal encoding correctly expanded the candidate to detailed records, but
+  `FMRefiner::GenerateNetlist` floorplanned only the netlist-vertex areas.
+  Final chiplet rectangles reconstructed from detailed area then overlapped
+  at thermal post-evaluation.
+- Implementation policy: Expose
+  `BuildThermalBlockToGraphVertexMapping` as the shared deterministic mapping
+  policy and use it to expand a vertex partition before summing
+  technology-scaled physical area for floorplanning. Continue packing
+  detailed block power within each chiplet using the synthetic treemap.
+- Consequences: GA100 floorplans and thermal instances now describe the same
+  physical chiplet area. Corrected GA100 costs, geometry, and temperatures may
+  change relative to old results computed from undersized footprints.
+- Validation / follow-up: A mapping assertion was added to
+  `thermal_mvp_test`; build and `ctest -R thermal_mvp_test` passed. A real
+  GA100 Hom-Cost post-evaluation completed with one thermal field and reports
+  `base=32.704578`, `T_max=307.324463 K`, `T_avg=303.450958 K`.

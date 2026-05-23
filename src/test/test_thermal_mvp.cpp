@@ -104,6 +104,20 @@ int main(int argc, char** argv) {
   const std::vector<float> y_locations = {0.0f};
   const double base_cost = 123.456;
 
+  const std::vector<block> hierarchical_blocks = {
+      {"sm_0", 1.0, 1.0, "7nm", false},
+      {"sm_1", 1.0, 1.0, "7nm", false},
+      {"l2_0", 1.0, 1.0, "7nm", true},
+      {"hbm_1024_phy_0", 1.0, 1.0, "7nm", true},
+      {"hbm_1536_ctrl_0", 1.0, 1.0, "7nm", true}};
+  const std::vector<std::string> graph_blocks = {
+      "l2_0", "l2_1", "hbm_1536_ctrl_0"};
+  const auto hierarchical_mapping =
+      chiplet::BuildThermalBlockToGraphVertexMapping(hierarchical_blocks,
+                                                      graph_blocks);
+  Require(hierarchical_mapping == std::vector<int>({0, 1, 0, 2, 2}),
+          "hierarchical thermal/floorplan mapping rules diverged");
+
   chiplet::ThermalConfig disabled_config;
   disabled_config.enable_thermal = false;
   chiplet::ThermalAwareEvaluator disabled(disabled_config, io_file, netlist_file,

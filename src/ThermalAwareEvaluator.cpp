@@ -212,7 +212,7 @@ void AssignProportionally(const std::vector<int>& block_indices,
   }
 }
 
-std::vector<int> BuildBlockToGraphVertexMapping(
+std::vector<int> BuildBlockToGraphVertexMappingImpl(
     const std::vector<block>& blocks,
     const std::vector<std::string>& graph_block_names) {
   if (graph_block_names.empty()) {
@@ -415,6 +415,12 @@ void AddRectToRaster(const double rect_x,
 }
 
 } // namespace
+
+std::vector<int> BuildThermalBlockToGraphVertexMapping(
+    const std::vector<block>& blocks,
+    const std::vector<std::string>& graph_block_names) {
+  return BuildBlockToGraphVertexMappingImpl(blocks, graph_block_names);
+}
 
 ThermalInstanceEncoder::ThermalInstanceEncoder(ThermalConfig config)
     : config_(std::move(config)) {}
@@ -1437,7 +1443,7 @@ void ThermalAwareEvaluator::EnsureInitialized() {
     library_dicts_->average_bandwidth_utilization = std::get<1>(netlist_result);
     library_dicts_->block_names = std::get<2>(netlist_result);
     block_to_graph_vertex_ =
-        BuildBlockToGraphVertexMapping(blocks_, library_dicts_->block_names);
+        BuildThermalBlockToGraphVertexMapping(blocks_, library_dicts_->block_names);
     if (blocks_.size() != library_dicts_->block_names.size()) {
       std::cout << "[THERMAL] Mapped " << blocks_.size()
                 << " block-level power records onto "

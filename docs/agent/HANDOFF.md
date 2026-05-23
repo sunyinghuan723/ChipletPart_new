@@ -948,6 +948,33 @@ Artifacts:
 - `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_summary.csv`
 - `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_analysis.md`
 
+## Experiment V4 Rerun Status On 2026-05-24
+
+The current rerun uses the v3 experiment form and the legacy
+`2d_power_map` compatibility backend: Hom/Het cost-only with final thermal
+post-evaluation, Hom/Het thermal-aware search, seed `1`, `T_budget=300 K`,
+and `lambda_peak=0.1` for the thermal comparison.
+
+Completed output directories with `analysis/summary.csv`, `analysis.md`,
+`commands.sh`, and the partition/temperature comparison figure:
+
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_epyc7282`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_mempool_group`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+
+GA100 initially failed at Hom-Cost post-evaluation because its 179 mapped
+block-level areas expanded chiplet rectangles relative to the 45-vertex
+floorplan. `FMRefiner::GenerateNetlist` now reuses
+`BuildThermalBlockToGraphVertexMapping` and accumulates technology-scaled
+detailed area for hierarchical floorplans. A real GA100 Hom-Cost post-eval
+smoke completed after the fix and reported `base=32.704578`,
+`T_max=307.324463 K`, and `T_avg=303.450958 K`.
+
+Remaining work is to rerun the clean formal GA100 directory, complete
+`48_2_14_4_1600_1600`, and assemble the five-case result summary. Results
+from v4 use corrected final and hierarchical geometry and must not be treated
+as geometry-identical repeats of older v3 output.
+
 ## Unresolved Issues
 
 1. GPU is currently available in the checked shell/Python environment, but this

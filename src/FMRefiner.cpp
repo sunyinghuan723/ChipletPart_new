@@ -1950,28 +1950,43 @@ HGraphPtr ChipletRefiner::GenerateNetlist(const HGraphPtr hgraph,
   Matrix<float> vertex_weights_c = GetBlockBalance(hgraph, partition);
 
   // The floorplan must use the physical area after technology assignment,
-  // matching the cost and thermal encoders rather than the source-node area.
-  if (cost_model_initialized_ && blocks_.size() == partition.size() &&
-      !vertex_weights_c.empty()) {
-    const std::vector<std::string> tech_assignment =
-        GetPartitionTechAssignment(partition);
-    for (auto &weights : vertex_weights_c) {
-      if (!weights.empty()) {
-        weights[0] = 0.0f;
+  // matching the thermal encoder rather than only the netlist-vertex area.
+  if (cost_model_initialized_ && !vertex_weights_c.empty()) {
+    std::vector<int> physical_partition;
+    if (blocks_.size() == partition.size()) {
+      physical_partition = partition;
+    } else if (libraryDicts_ != nullptr &&
+               libraryDicts_->block_names.size() == partition.size()) {
+      const std::vector<int> block_to_graph_vertex =
+          BuildThermalBlockToGraphVertexMapping(blocks_,
+                                                libraryDicts_->block_names);
+      physical_partition.resize(blocks_.size(), 0);
+      for (size_t block_id = 0; block_id < blocks_.size(); ++block_id) {
+        physical_partition[block_id] = partition[block_to_graph_vertex[block_id]];
       }
     }
-    for (size_t block_id = 0; block_id < partition.size(); ++block_id) {
-      const int part_id = partition[block_id];
-      if (part_id < 0 || part_id >= static_cast<int>(vertex_weights_c.size()) ||
-          part_id >= static_cast<int>(tech_assignment.size()) ||
-          vertex_weights_c[part_id].empty()) {
-        continue;
+    if (!physical_partition.empty()) {
+      const std::vector<std::string> tech_assignment =
+          GetPartitionTechAssignment(partition);
+      for (auto &weights : vertex_weights_c) {
+        if (!weights.empty()) {
+          weights[0] = 0.0f;
+        }
       }
-      const block &source_block = blocks_[block_id];
-      vertex_weights_c[part_id][0] +=
-          source_block.area *
-          area_scaling_factor(source_block.tech, tech_assignment[part_id],
-                              source_block.is_memory);
+      for (size_t block_id = 0; block_id < blocks_.size(); ++block_id) {
+        const int part_id = physical_partition[block_id];
+        if (part_id < 0 ||
+            part_id >= static_cast<int>(vertex_weights_c.size()) ||
+            part_id >= static_cast<int>(tech_assignment.size()) ||
+            vertex_weights_c[part_id].empty()) {
+          continue;
+        }
+        const block &source_block = blocks_[block_id];
+        vertex_weights_c[part_id][0] +=
+            source_block.area *
+            area_scaling_factor(source_block.tech, tech_assignment[part_id],
+                                source_block.is_memory);
+      }
     }
   }
   

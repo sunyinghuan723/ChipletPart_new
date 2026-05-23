@@ -697,6 +697,47 @@ Result: passed. Output directory:
 - `T_avg`: min `308.3147 K`, mean `315.7380 K`, max `327.6581 K`.
 - Split: train `21`, val `4`, test `5`.
 
+## Experiment V4 Rerun And GA100 Hierarchical Floorplan Fix On 2026-05-24
+
+The v4 rerun follows the v3 protocol with seed `1`, homogeneous and
+heterogeneous `cost-only`/`thermal` modes, and final-winner thermal
+post-evaluation for both cost-only modes. Completed and analyzed results are
+currently available for:
+
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_epyc7282`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_mempool_group`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+
+The first formal GA100 attempt failed during homogeneous cost-only final
+post-evaluation with `Overlapping chiplets in encoded floorplan: 0 and 1`.
+GA100 maps 179 detailed block records to 45 netlist vertices; the thermal
+encoder used detailed block area while `GenerateNetlist` still floorplanned
+only the smaller netlist-vertex area. The resulting stored coordinates could
+not contain the physical chiplet rectangles.
+
+The fix exposes the established thermal block-to-vertex mapping for reuse by
+`FMRefiner::GenerateNetlist` and constructs hierarchical floorplan weights by
+accumulating mapped, technology-scaled detailed block areas. This retains
+block-level power rasterization while making the physical footprint consistent
+with thermal encoding.
+
+Validation:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+ctest --test-dir build -R thermal_mvp_test --output-on-failure
+./run_chiplet_test.sh ga100 --seed 1 \
+  --thermal --thermal-budget 300 --thermal-lambda-peak 0 \
+  --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_ga100_hierarchical_floorplan_smoke_20260524 \
+  --thermal-post-eval-only
+```
+
+Result: build and test passed. The real GA100 post-evaluation completed with
+one block-level thermal field and reported `base=32.704578`,
+`T_max=307.324463 K`, and `T_avg=303.450958 K`. The failed partial v4 GA100
+directory must be cleared and rerun using the fixed binary.
+
 ## Current Blockers
 
 - GPU state is currently good in this shell/Python environment, but it remains

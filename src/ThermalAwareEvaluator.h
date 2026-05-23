@@ -13,6 +13,10 @@
 
 namespace chiplet {
 
+std::vector<int> BuildThermalBlockToGraphVertexMapping(
+    const std::vector<block>& blocks,
+    const std::vector<std::string>& graph_block_names);
+
 struct ThermalChipletInfo {
   int id = 0;
   std::string technology;
