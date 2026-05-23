@@ -40,12 +40,20 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Next smallest useful step: reduce remaining thermal-mode runtime by limiting
-expensive artifact writes during refinement or adding a batched inference path.
-The first persistent-service milestone is complete and validated.
+Run the requested five-benchmark `experiment_v4_*` refresh using thermally
+comparable Hom-Cost/Hom-Therm/Het-Cost/Het-Therm outputs, cost-only final
+post-evaluation, and per-benchmark comparison figures/reports.
 
 ## Completed Small Tasks
 
+- Fixed final-partition thermal post-evaluation geometry on 2026-05-24.
+  `ThermalInstanceEncoder` now translates raw floorplanner coordinates to the
+  package origin without first clamping negative coordinates, which could
+  introduce an artificial overlap. Standard homogeneous
+  `--thermal-post-eval-only` now re-floorplans each refined final candidate
+  before ranking/post-evaluation, matching the genetic path and preventing a
+  pre-refinement floorplan from being paired with a post-refinement partition.
+  A real EPYC post-eval smoke now completes with a generated thermal field.
 - Added fixed-count control for standard homogeneous experiments on 2026-05-23:
   `run_chiplet_test.sh epyc7282 --fixed-parts 4` now restricts generated and
   accepted standard-search candidates to four active partitions. A requested
@@ -168,13 +176,35 @@ The first persistent-service milestone is complete and validated.
 
 ## Next Small Verifiable Task
 
-Reduce per-evaluation artifact overhead in refinement thermal mode. Legacy 2D
-inference still writes one compressed field NPZ per evaluated move/swap, which
-is useful for debug but costly for long searches; a "metrics-only during
-refinement, dump final/top candidates" mode is the next low-risk runtime
-improvement.
+Complete the requested `experiment_v4_*` result generation and verify that
+each benchmark contains four final solutions, two cost-only post-evaluations,
+one summary, one analysis report, and its partition/temperature comparison
+figure.
 
 ## Recent Validation
+
+Final-partition post-evaluation geometry fix validation on 2026-05-24:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+cd build && ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed. The thermal MVP test now confirms that true overlaps are
+rejected while a separated layout with a negative floorplanner coordinate is
+accepted after package-origin translation.
+
+```bash
+./run_chiplet_test.sh epyc7282 --seed 1 \
+  --thermal --thermal-budget 300 --thermal-lambda-peak 0 \
+  --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_epyc_post_eval_coordinate_fix \
+  --thermal-post-eval-only
+```
+
+Result: passed with one real DeepOHeat field. The newly re-floorplanned
+cost-only final candidate has three parts, base cost `84.825104`,
+`T_max=307.117035 K`, and `T_avg=301.992432 K`.
 
 EPYC homogeneous fixed-4 follow-up validation on 2026-05-23:
 

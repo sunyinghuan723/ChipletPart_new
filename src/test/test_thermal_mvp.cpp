@@ -189,6 +189,19 @@ int main(int argc, char** argv) {
   Require(saw_overlap_failure,
           "overlapping chiplets were accepted by the thermal encoder");
 
+  const std::vector<float> separated_negative_x_locations = {-10000.0f, 0.0f};
+  bool translated_floorplan_accepted = true;
+  try {
+    (void)mock.Evaluate(base_cost, overlapping_partition,
+                        overlapping_tech_assignment, overlapping_aspect_ratios,
+                        separated_negative_x_locations, overlapping_y_locations,
+                        true);
+  } catch (const std::exception&) {
+    translated_floorplan_accepted = false;
+  }
+  Require(translated_floorplan_accepted,
+          "normalizing negative floorplan coordinates introduced an overlap");
+
   chiplet::ThermalConfig high_budget_config = mock_config;
   high_budget_config.thermal_budget = thermal.thermal.t_max + 100.0;
   high_budget_config.thermal_dump_instances =

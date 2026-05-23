@@ -340,3 +340,27 @@ methodology, or experiment-policy decision is made.
   DeepOHeat fixed-4 comparison completed. Investigate homogeneous incumbent
   retention and floorplan/refinement comparability before using Hom-Therm as
   an improvement claim.
+
+## ADR-0019: Require Matched Final Geometry For Thermal Post-Evaluation
+
+- Date: 2026-05-24
+- Decision: Final-candidate thermal post-evaluation must encode a floorplan
+  generated for the final refined partition. Thermal coordinates retain their
+  signed floorplanner values until the entire package is translated to an
+  origin-aligned coordinate system.
+- Status: Accepted
+- Context: The new overlap rejection exposed two stale-geometry defects during
+  an EPYC Hom-Cost post-evaluation. The homogeneous post-eval-only path could
+  reuse geometry from before FM/KL changed the partition, and the encoder
+  individually clamped negative coordinates before translation, potentially
+  converting separated chiplets into overlapping ones.
+- Consequences: Opt-in homogeneous thermal and post-eval-only runs perform a
+  final floorplan for their refined candidates before evaluation. Cost-only
+  search remains cost-driven, but any reported thermal result now refers to
+  matching, non-overlapping final geometry. Newly generated v4 numbers should
+  not be compared as if they were identical reruns of older stale-geometry
+  outputs.
+- Validation / follow-up: `thermal_mvp_test` rejects true overlap and accepts
+  separated negative-coordinate geometry after translation. A real EPYC
+  cost-only post-evaluation now completes with one field and reports
+  `base=84.825104`, `T_max=307.117035 K`, `T_avg=301.992432 K`.

@@ -21,6 +21,18 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-24, the requested five-benchmark v4 rerun exposed a blocker in
+cost-only final-candidate thermal post-evaluation after the overlap-validation
+change: homogeneous post-eval paired a refined partition with stale
+pre-refinement floorplan geometry, and thermal coordinate encoding clamped
+negative floorplanner locations before translating the package to the origin.
+The code now re-floorplans refined homogeneous candidates whenever thermal
+evaluation is enabled and preserves raw coordinates until origin translation.
+The real EPYC post-eval smoke now succeeds with a 3-part cost-only winner
+(`base=84.825104`, `T_max=307.117035 K`, `T_avg=301.992432 K`). V4 values
+must therefore be regenerated and must not be mixed with the earlier
+overlapping/stale-geometry results.
+
 On 2026-05-23, a follow-up EPYC homogeneous experiment added
 `--fixed-parts <count>` to standard partitioning and ran both Hom-Cost and
 Hom-Therm with four active partitions. Hom-Cost scored `79.009962` after
@@ -522,6 +534,22 @@ This Dataset V3 pilot is useful for pipeline and small-surrogate debugging, but
 it is still single-benchmark and not a final paper-scale dataset.
 
 ## Recent Validation
+
+Final-partition post-evaluation geometry fix validation on 2026-05-24:
+
+```bash
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+cd build && ctest -R thermal_mvp_test --output-on-failure
+./run_chiplet_test.sh epyc7282 --seed 1 \
+  --thermal --thermal-budget 300 --thermal-lambda-peak 0 \
+  --thermal-device auto \
+  --thermal-output-dir /tmp/chipletpart_epyc_post_eval_coordinate_fix \
+  --thermal-post-eval-only
+```
+
+Result: passed. The C++ regression test covers negative-coordinate package
+translation without artificial overlap; the EPYC smoke emits one real
+DeepOHeat field for its newly re-floorplanned final cost-only candidate.
 
 Persistent DeepOHeat service validation on 2026-05-15:
 

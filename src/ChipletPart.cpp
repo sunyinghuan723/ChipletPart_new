@@ -2318,7 +2318,9 @@ void ChipletPart::Partition(
         }
         
         int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
-        if (thermal_evaluator && thermal_evaluator->Enabled() && floorplanning) {
+        // Post-eval-only runs still need geometry for the refined final
+        // partition, not the floorplan captured before FM/KL changed it.
+        if (thermal_config_.enable_thermal && floorplanning) {
           auto final_floor_result = thread_refiner->RunFloorplanner(
               partition_copy, hypergraph_, 200, 50, 0.00001);
           result_aspect_ratios = std::get<0>(final_floor_result);

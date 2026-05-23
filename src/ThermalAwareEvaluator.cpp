@@ -574,10 +574,10 @@ ThermalInstance ThermalInstanceEncoder::Encode(
     const double width = std::sqrt(chip_area * aspect_ratio);
     const double height = std::sqrt(chip_area / aspect_ratio);
     const double x = part_id < static_cast<int>(x_locations.size())
-                         ? std::max(0.0f, x_locations[part_id])
+                         ? x_locations[part_id]
                          : 0.0;
     const double y = part_id < static_cast<int>(y_locations.size())
-                         ? std::max(0.0f, y_locations[part_id])
+                         ? y_locations[part_id]
                          : 0.0;
 
     ThermalChipletInfo chiplet;
