@@ -956,11 +956,13 @@ post-evaluation, Hom/Het thermal-aware search, seed `1`, `T_budget=300 K`,
 and `lambda_peak=0.1` for the thermal comparison.
 
 Completed output directories with `analysis/summary.csv`, `analysis.md`,
-`commands.sh`, and the partition/temperature comparison figure:
+`commands.sh`, and PNG/PDF partition/temperature comparison figures:
 
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_2_14_4_1600_1600`
 - `/home/yhsun/Chiplet-Partitioning/experiment_v4_epyc7282`
 - `/home/yhsun/Chiplet-Partitioning/experiment_v4_mempool_group`
-- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_ga100`
 
 GA100 initially failed at Hom-Cost post-evaluation because its 179 mapped
 block-level areas expanded chiplet rectangles relative to the 45-vertex
@@ -968,12 +970,27 @@ floorplan. `FMRefiner::GenerateNetlist` now reuses
 `BuildThermalBlockToGraphVertexMapping` and accumulates technology-scaled
 detailed area for hierarchical floorplans. A real GA100 Hom-Cost post-eval
 smoke completed after the fix and reported `base=32.704578`,
-`T_max=307.324463 K`, and `T_avg=303.450958 K`.
+`T_max=307.324463 K`, and `T_avg=303.450958 K`; the clean formal GA100 rerun
+also completed.
 
-Remaining work is to rerun the clean formal GA100 directory, complete
-`48_2_14_4_1600_1600`, and assemble the five-case result summary. Results
-from v4 use corrected final and hierarchical geometry and must not be treated
-as geometry-identical repeats of older v3 output.
+Final thermal-aware minus cost-only `T_max` deltas are:
+
+| Benchmark | Homogeneous delta (K) | Heterogeneous delta (K) |
+| --- | ---: | ---: |
+| `48_1_14_4_1600_1600` | `+0.127014` | `-2.700043` |
+| `48_2_14_4_1600_1600` | `-2.167236` | `-1.022186` |
+| `epyc7282` | `-0.145508` | `-1.816315` |
+| `mempool_group` | `-1.724731` | `-0.003815` |
+| `ga100` | `-0.087463` | `-0.890320` |
+
+All ten cost-only modes have exactly one final post-evaluation thermal-result
+field and all formal run logs completed without failure. WS2 Het-Cost reached
+`136630256 KB` maximum RSS; its final evaluation successfully used the
+existing single-call inference fallback after persistent-service `fork`
+allocation failed, and the case analysis documents this operational note.
+
+Results from v4 use corrected final and hierarchical geometry and must not be
+treated as geometry-identical repeats of older v3 output.
 
 ## Unresolved Issues
 

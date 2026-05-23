@@ -702,11 +702,18 @@ Result: passed. Output directory:
 The v4 rerun follows the v3 protocol with seed `1`, homogeneous and
 heterogeneous `cost-only`/`thermal` modes, and final-winner thermal
 post-evaluation for both cost-only modes. Completed and analyzed results are
-currently available for:
+available for all five requested benchmarks:
 
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_2_14_4_1600_1600`
 - `/home/yhsun/Chiplet-Partitioning/experiment_v4_epyc7282`
 - `/home/yhsun/Chiplet-Partitioning/experiment_v4_mempool_group`
-- `/home/yhsun/Chiplet-Partitioning/experiment_v4_48_1_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v4_ga100`
+
+Each directory contains `analysis/commands.sh`, `analysis/summary.csv`,
+`analysis/analysis.md`, and PNG/PDF partition-plus-temperature comparison
+figures. Verification found one final thermal-result field for each of the ten
+cost-only post-evaluations and no failed formal run logs.
 
 The first formal GA100 attempt failed during homogeneous cost-only final
 post-evaluation with `Overlapping chiplets in encoded floorplan: 0 and 1`.
@@ -735,8 +742,24 @@ ctest --test-dir build -R thermal_mvp_test --output-on-failure
 
 Result: build and test passed. The real GA100 post-evaluation completed with
 one block-level thermal field and reported `base=32.704578`,
-`T_max=307.324463 K`, and `T_avg=303.450958 K`. The failed partial v4 GA100
-directory must be cleared and rerun using the fixed binary.
+`T_max=307.324463 K`, and `T_avg=303.450958 K`. The formal GA100 directory
+was subsequently cleared and rerun successfully with the fixed binary.
+
+Peak-temperature changes for thermal-aware minus cost-only final solutions:
+
+| Benchmark | Homogeneous delta (K) | Heterogeneous delta (K) |
+| --- | ---: | ---: |
+| `48_1_14_4_1600_1600` | `+0.127014` | `-2.700043` |
+| `48_2_14_4_1600_1600` | `-2.167236` | `-1.022186` |
+| `epyc7282` | `-0.145508` | `-1.816315` |
+| `mempool_group` | `-1.724731` | `-0.003815` |
+| `ga100` | `-0.087463` | `-0.890320` |
+
+Operational note: WS2 (`48_2_14_4_1600_1600`) Het-Cost reached
+`136630256 KB` maximum RSS. Its final post-evaluation could not fork the
+persistent Python service under that pressure, fell back to the single-call
+inference path, and completed with a valid selected result; this is recorded
+in that case's `analysis/analysis.md`.
 
 ## Current Blockers
 
