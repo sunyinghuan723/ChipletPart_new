@@ -21,6 +21,17 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-23, the latest user-requested milestone refreshed the EPYC paper
+data using the existing commands under
+`/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh`.
+The refreshed four-search result set, two supplemental cost-only thermal
+post-evaluations, preserved heterogeneous-thermal final assignment, updated
+summary, and updated `/home/yhsun/Chiplet-Partitioning/main.tex` all live
+outside this Git repository. This refresh intentionally follows the requested
+script and therefore uses the `legacy_2d_power_map` compatibility backend; it
+is not evidence that the primary `package_thermal` paper methodology has been
+completed or validated.
+
 Most recent user-requested milestone reduced DeepOHeat invocation overhead in
 thermal refinement by replacing repeated Python subprocess launches with a
 persistent Python service path. The previous milestone pushed thermal objective
@@ -836,6 +847,42 @@ Revalidation:
 - surrogate `T_max` error: cost-only / high-budget about +19.022 K; strict
   about +7.670 to +10.985 K
 
+## EPYC Paper-Data Refresh On 2026-05-23
+
+The EPYC V3 output directory was refreshed in place after first removing prior
+thermal directories because `ThermalAwareEvaluator` appends to an existing
+manifest. Four searches were executed from
+`/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh`.
+Cost-only temperatures in the paper table come from separate runs with
+`--thermal-post-eval-only` and `--thermal-lambda-peak 0`; the table runtime is
+the search runtime rather than post-evaluation time.
+
+Refreshed EPYC paper rows:
+
+```text
+Hom-Cost   base=78.176  T_max=302.888  T_avg=299.859  parts=4  all 7nm          runtime=7.1 s
+Hom-Therm  base=83.826  T_max=304.481  T_avg=300.876  parts=3  all 7nm          runtime=124.6 s
+Het-Cost   base=75.089  T_max=304.550  T_avg=300.374  parts=5  5x7nm            runtime=105.8 s
+Het-Therm  base=74.421  T_max=302.880  T_avg=299.953  parts=5  3x7nm+2x10nm    runtime=798.4 s
+```
+
+The heterogeneous thermal log prints only its final objective
+(`75.250145`), not the associated thermal fields. The matching dumped record is
+`heterogeneous_thermal/thermal/instances/epyc7282_thermal_seed1_20260523_155548_15168f2d9859afcb.thermal_result.json`;
+its partition exactly matches
+`heterogeneous_thermal/final_partition.parts`. The thermal final assignment
+was copied into the experiment directory before the subsequent cost-only
+post-evaluation overwrote ChipletPart's fixed genetic output path.
+
+Validation notes:
+
+- Both thermal-search manifest/NPZ counts match: homogeneous `306/306`,
+  heterogeneous `2481/2481`.
+- Both cost-only post-evaluation manifests contain one matching NPZ field.
+- Log scans found no failure or fallback markers.
+- A temporary `latexmk` build of the updated top-level `main.tex` stops at the
+  pre-existing missing file `picture/thermal_factors.png`.
+
 ## Unresolved Issues
 
 1. GPU is currently available in the checked shell/Python environment, but this
@@ -855,6 +902,10 @@ Revalidation:
    visible via PyTorch but not separately smoked.
 8. Do not casually add `28nm`; previous Codex-reported runs hit unsupported
    technology scaling for `45nm -> 28nm`. The pilot uses `7nm,14nm`.
+9. The refreshed EPYC values requested for `main.tex` come from
+   `legacy_2d_power_map`, while the documented final research direction is
+   `package_thermal`; final paper claims still need a consistent validated
+   backend.
 
 ## Easy-To-Miss Points
 

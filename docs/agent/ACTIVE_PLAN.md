@@ -46,6 +46,17 @@ The first persistent-service milestone is complete and validated.
 
 ## Completed Small Tasks
 
+- Refreshed the user-requested EPYC paper experiment on 2026-05-23 using
+  `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh`
+  and supplemental final-candidate thermal post-evaluations for both cost-only
+  winners. The refreshed heterogeneous thermal run selects five chiplets with
+  `3x7nm+2x10nm`, base cost approximately `74.421`, `T_max=302.880 K`,
+  `T_avg=299.953 K`, and search runtime `798.43 s`. Results and the updated
+  paper source are outside this repository under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282` and
+  `/home/yhsun/Chiplet-Partitioning/main.tex`. This requested run uses the
+  `legacy_2d_power_map` compatibility backend, not the primary
+  `package_thermal` research path.
 - Added a persistent DeepOHeat Python service path on 2026-05-15. C++
   `PythonDeepOHeatAdapter` now starts one long-running Python worker per
   evaluator, sends JSON-line inference requests over pipes, and falls back to
@@ -156,6 +167,36 @@ refinement, dump final/top candidates" mode is the next low-risk runtime
 improvement.
 
 ## Recent Validation
+
+EPYC paper-data refresh validation on 2026-05-23:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh
+```
+
+Result: passed. Homogeneous thermal output contains `306` matching manifest
+records and NPZ fields; heterogeneous thermal output contains `2481` matching
+manifest records and NPZ fields. Both cost-only final-candidate
+post-evaluations completed and contain one thermal field each.
+
+```bash
+diff -u \
+  /home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/heterogeneous_thermal/final_partition.parts \
+  <(jq -r '.partition[]' /home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/heterogeneous_thermal/thermal/instances/epyc7282_thermal_seed1_20260523_155548_15168f2d9859afcb.json)
+```
+
+Result: passed with no differences; the thermal-result record used for the
+paper table corresponds to the preserved final partition.
+
+```bash
+latexmk -pdf -interaction=nonstopmode -halt-on-error \
+  -outdir=/tmp/chiplet_partitioning_latex_epyc_rerun \
+  /home/yhsun/Chiplet-Partitioning/main.tex
+```
+
+Result: blocked by the pre-existing missing input file
+`picture/thermal_factors.png`; PDF generation does not reach a failure caused
+by the EPYC text/table edits.
 
 Persistent DeepOHeat service validation on 2026-05-15:
 
