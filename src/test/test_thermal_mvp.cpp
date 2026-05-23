@@ -171,6 +171,24 @@ int main(int argc, char** argv) {
   Require(densities.size() == 64 && *max_density - *min_density > 1.0e-6,
           "block-level rasterization did not create a nonuniform power map");
 
+  std::vector<int> overlapping_partition = partition;
+  overlapping_partition.back() = 1;
+  const std::vector<std::string> overlapping_tech_assignment = {"14nm", "14nm"};
+  const std::vector<float> overlapping_aspect_ratios = {1.0f, 1.0f};
+  const std::vector<float> overlapping_x_locations = {0.0f, 0.0f};
+  const std::vector<float> overlapping_y_locations = {0.0f, 0.0f};
+  bool saw_overlap_failure = false;
+  try {
+    (void)mock.Evaluate(base_cost, overlapping_partition,
+                        overlapping_tech_assignment, overlapping_aspect_ratios,
+                        overlapping_x_locations, overlapping_y_locations, true);
+  } catch (const std::exception& e) {
+    saw_overlap_failure =
+        std::string(e.what()).find("Overlapping chiplets") != std::string::npos;
+  }
+  Require(saw_overlap_failure,
+          "overlapping chiplets were accepted by the thermal encoder");
+
   chiplet::ThermalConfig high_budget_config = mock_config;
   high_budget_config.thermal_budget = thermal.thermal.t_max + 100.0;
   high_budget_config.thermal_dump_instances =

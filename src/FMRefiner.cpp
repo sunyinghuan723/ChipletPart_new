@@ -1948,6 +1948,32 @@ HGraphPtr ChipletRefiner::GenerateNetlist(const HGraphPtr hgraph,
                                           const std::vector<int> &partition) {
   // Calculate block balances once and reuse
   Matrix<float> vertex_weights_c = GetBlockBalance(hgraph, partition);
+
+  // The floorplan must use the physical area after technology assignment,
+  // matching the cost and thermal encoders rather than the source-node area.
+  if (cost_model_initialized_ && blocks_.size() == partition.size() &&
+      !vertex_weights_c.empty()) {
+    const std::vector<std::string> tech_assignment =
+        GetPartitionTechAssignment(partition);
+    for (auto &weights : vertex_weights_c) {
+      if (!weights.empty()) {
+        weights[0] = 0.0f;
+      }
+    }
+    for (size_t block_id = 0; block_id < partition.size(); ++block_id) {
+      const int part_id = partition[block_id];
+      if (part_id < 0 || part_id >= static_cast<int>(vertex_weights_c.size()) ||
+          part_id >= static_cast<int>(tech_assignment.size()) ||
+          vertex_weights_c[part_id].empty()) {
+        continue;
+      }
+      const block &source_block = blocks_[block_id];
+      vertex_weights_c[part_id][0] +=
+          source_block.area *
+          area_scaling_factor(source_block.tech, tech_assignment[part_id],
+                              source_block.is_memory);
+    }
+  }
   
   // Create a new vertex weights matrix only including non-empty clusters
   Matrix<float> new_vertex_weights_c;
@@ -2252,10 +2278,14 @@ float ChipletRefiner::GetObjectiveFromScratch(
 
   const std::vector<std::string> tech_assignment =
       GetPartitionTechAssignment(partition);
-  auto thermal_eval = thermal_evaluator_->Evaluate(
-      base_cost, partition, tech_assignment, eval_aspect_ratios,
-      eval_x_locations, eval_y_locations, floorplan_success);
-  return static_cast<float>(thermal_eval.objective);
+  try {
+    auto thermal_eval = thermal_evaluator_->Evaluate(
+        base_cost, partition, tech_assignment, eval_aspect_ratios,
+        eval_x_locations, eval_y_locations, floorplan_success);
+    return static_cast<float>(thermal_eval.objective);
+  } catch (const std::exception&) {
+    return std::numeric_limits<float>::max();
+  }
 }
 
 // Calculate the cost difference of moving a block between partitions

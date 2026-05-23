@@ -604,6 +604,24 @@ ThermalInstance ThermalInstanceEncoder::Encode(
     throw std::runtime_error("[THERMAL] Thermal instance has no chiplets");
   }
 
+  for (size_t left = 0; left < instance.chiplets.size(); ++left) {
+    const auto& a = instance.chiplets[left];
+    for (size_t right = left + 1; right < instance.chiplets.size(); ++right) {
+      const auto& b = instance.chiplets[right];
+      const double overlap_x =
+          std::min(a.x_mm + a.width_mm, b.x_mm + b.width_mm) -
+          std::max(a.x_mm, b.x_mm);
+      const double overlap_y =
+          std::min(a.y_mm + a.height_mm, b.y_mm + b.height_mm) -
+          std::max(a.y_mm, b.y_mm);
+      if (overlap_x > kEpsilon && overlap_y > kEpsilon) {
+        throw std::runtime_error(
+            "[THERMAL] Overlapping chiplets in encoded floorplan: " +
+            std::to_string(a.id) + " and " + std::to_string(b.id));
+      }
+    }
+  }
+
   if (min_x == std::numeric_limits<double>::max()) {
     min_x = 0.0;
     min_y = 0.0;
