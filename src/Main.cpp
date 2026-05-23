@@ -105,12 +105,13 @@ void displayHeader() {
 // Function to display usage instructions
 void displayUsage(const char* programName) {
   std::cout << "Usage: " << programName << " [options] <arguments>" << std::endl;
-  std::cout << "Standard mode: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node> [--seed <value>]" << std::endl;
+  std::cout << "Standard mode: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node> [--seed <value>] [--fixed-parts <value>]" << std::endl;
   std::cout << "Evaluation mode: " << programName << " <partition_file> <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> <tech_node_or_tech_file> [--seed <value>]" << std::endl;
   std::cout << "Canonical GA: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> --canonical-ga --tech-nodes <list> [--seed <value>] [--generations <value>] [--population <value>]" << std::endl;
   std::cout << "Tech Enumeration: " << programName << " <io_file> <layer_file> <wafer_process_file> <assembly_process_file> <test_file> <netlist_file> <blocks_file> <reach> <separation> --tech-enum --tech-nodes <list> [--max-partitions <value>] [--detailed-output] [--seed <value>]" << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  --seed <value>        : Random seed for reproducible results (default: 42)" << std::endl;
+  std::cout << "  --fixed-parts <value> : Restrict standard homogeneous search to this chiplet count" << std::endl;
   std::cout << "  --canonical-ga        : Use canonical genetic algorithm for technology assignment" << std::endl;
   std::cout << "  --tech-enum           : Enumerate all canonical technology assignments up to max partitions" << std::endl;
   std::cout << "  --tech-nodes <list>   : Comma-separated list of technology nodes (e.g., '7nm,14nm,28nm')" << std::endl;
@@ -249,6 +250,7 @@ bool hasFlag(int argc, char* argv[], const std::string& option) {
 
 bool isOptionWithValue(const std::string& option) {
   return option == "--seed" ||
+         option == "--fixed-parts" ||
          option == "--tech-nodes" ||
          option == "--generations" ||
          option == "--population" ||
@@ -894,6 +896,13 @@ int main(int argc, char *argv[]) {
       } else {
         // Single technology partitioning
         std::cout << "[INFO] Partitioning using XML input files" << std::endl;
+        std::string fixed_parts_str;
+        if (getArgValue(argc, argv, "--fixed-parts", fixed_parts_str)) {
+          const int fixed_parts = safeStoi(fixed_parts_str, "fixed-parts");
+          chiplet_part->SetFixedPartitionCount(fixed_parts);
+          Console::Info("Restricting standard partition search to " +
+                        std::to_string(fixed_parts) + " parts");
+        }
         
         chiplet_part->Partition(
             io_definitions_file, layer_definitions_file, wafer_process_definitions_file,

@@ -21,7 +21,16 @@ revalidation.
 
 ## Current Task
 
-On 2026-05-23, the latest user-requested milestone refreshed the EPYC paper
+On 2026-05-23, a follow-up EPYC homogeneous experiment added
+`--fixed-parts <count>` to standard partitioning and ran both Hom-Cost and
+Hom-Therm with four active partitions. Hom-Cost scored `79.009962` after
+thermal post-evaluation (`base=78.175713`, `T_max=302.888336 K`); Hom-Therm
+selected `93.465645` (`base=89.596008`, `T_max=306.220642 K`). The thermal
+run did not improve the objective, so it was intentionally not incorporated
+into `main.tex` or the primary summary rows. Diagnostic artifacts live at
+`/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_analysis.md`.
+
+Earlier on 2026-05-23, the user-requested milestone refreshed the EPYC paper
 data using the existing commands under
 `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh`.
 The refreshed four-search result set, two supplemental cost-only thermal
@@ -883,6 +892,34 @@ Validation notes:
 - A temporary `latexmk` build of the updated top-level `main.tex` stops at the
   pre-existing missing file `picture/thermal_factors.png`.
 
+## EPYC Homogeneous Fixed-4 Follow-Up On 2026-05-23
+
+Standard homogeneous mode now accepts `--fixed-parts <count>` through both
+`chipletPart` and `run_chiplet_test.sh`. The option restricts the standard
+initial partition count set and rejects a refined candidate if it no longer
+has exactly that number of active partitions.
+
+The requested four-chiplet comparison uses `--fixed-parts 4`,
+`--thermal-budget 300`, `--thermal-lambda-peak 0.1`, and seed `1`:
+
+```text
+Hom-Cost fixed-4 post-eval  objective=79.009962 base=78.175713 T_max=302.888336 T_avg=299.859070 penalty=0.834249
+Hom-Therm fixed-4            objective=93.465645 base=89.596008 T_max=306.220642 T_avg=300.552704 penalty=3.869639
+```
+
+All 55 Hom-Therm fixed-4 thermal records were inspected. Their minimum
+reconstructed objective is `82.158156791`, still above the Hom-Cost
+post-evaluated objective. The run therefore failed the paper-adoption
+criterion; `main.tex` was not changed for this follow-up. The result suggests
+that homogeneous refinement/incumbent retention and floorplan comparability
+need investigation before claiming thermal improvement.
+
+Artifacts:
+
+- `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands_fixed4_homogeneous.sh`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_summary.csv`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_analysis.md`
+
 ## Unresolved Issues
 
 1. GPU is currently available in the checked shell/Python environment, but this
@@ -906,6 +943,9 @@ Validation notes:
    `legacy_2d_power_map`, while the documented final research direction is
    `package_thermal`; final paper claims still need a consistent validated
    backend.
+10. EPYC Hom-Therm remains dominated by Hom-Cost even after matching its four
+    chiplets; investigate homogeneous incumbent retention/refinement before
+    replacing the paper's homogeneous comparison.
 
 ## Easy-To-Miss Points
 

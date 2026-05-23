@@ -16,6 +16,7 @@ show_help() {
     echo "  --reach <value>       Specify reach value (default: 0.50)"
     echo "  --separation <value>  Specify separation value (default: 0.25)"
     echo "  --tech <node>         Specify tech node for standard partitioning (default: 7nm)"
+    echo "  --fixed-parts <num>   Restrict standard homogeneous search to this chiplet count"
     echo "  --seed <value>        Specify random seed (default: 42)"
     echo "  --genetic             Use genetic tech partitioning algorithm"
     echo "  --canonical-ga        Use canonical genetic algorithm for technology assignment"
@@ -79,6 +80,7 @@ shift  # Remove the first argument
 DEFAULT_REACH="0.50"
 DEFAULT_SEPARATION="0.25"
 DEFAULT_TECH="7nm"
+DEFAULT_FIXED_PARTS=""
 DEFAULT_SEED="42"
 DEFAULT_GENERATIONS="50"
 DEFAULT_POPULATION="50"
@@ -125,6 +127,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --tech)
             DEFAULT_TECH="$2"
+            shift 2
+            ;;
+        --fixed-parts)
+            DEFAULT_FIXED_PARTS="$2"
             shift 2
             ;;
         --seed)
@@ -588,6 +594,11 @@ elif [ "$USE_GENETIC" = true ]; then
 else
     echo -e "${GREEN}Running standard partitioning for test case: ${TEST_CASE_NAME}${NC}"
     echo -e "${BLUE}Tech node: ${DEFAULT_TECH}${NC}"
+    FIXED_PARTS_ARGS=()
+    if [ -n "$DEFAULT_FIXED_PARTS" ]; then
+        echo -e "${BLUE}Fixed partitions: ${DEFAULT_FIXED_PARTS}${NC}"
+        FIXED_PARTS_ARGS=(--fixed-parts "$DEFAULT_FIXED_PARTS")
+    fi
     
     # Run the executable with standard partitioning
     "$EXECUTABLE" \
@@ -602,6 +613,7 @@ else
         "$DEFAULT_SEPARATION" \
         "$DEFAULT_TECH" \
         --seed "$DEFAULT_SEED" \
+        "${FIXED_PARTS_ARGS[@]}" \
         "${THERMAL_ARGS[@]}"
 fi
 

@@ -317,3 +317,26 @@ methodology, or experiment-policy decision is made.
   `658` real DeepOHeat result records and completed successfully in
   `203.39 s`. Next runtime target is reducing per-move field NPZ writes or
   adding batched requests.
+
+## ADR-0018: Support Fixed Partition Counts For Controlled Homogeneous Comparisons
+
+- Date: 2026-05-23
+- Decision: Standard homogeneous partitioning exposes `--fixed-parts <count>`
+  so cost-only and thermal-aware comparisons can be constrained to the same
+  number of active chiplets when required by an experiment.
+- Status: Accepted
+- Context: An EPYC homogeneous thermal run selected three parts while its
+  cost-only comparator selected four, and the thermal result was worse on
+  both cost and temperature. The user requested a controlled four-part rerun.
+- Implementation policy: Restrict standard initial candidate generation to the
+  requested count and reject a final refined candidate unless it still
+  contains exactly that number of active partitions. This option is opt-in and
+  does not alter the unconstrained or heterogeneous paths.
+- Consequences: Fixed-count experiments isolate thermal/refinement behavior
+  from changes in chiplet count. The EPYC fixed-4 rerun still failed to improve
+  objective (`93.465645` versus the cost-only post-evaluated `79.009962`), so
+  it is a diagnostic record rather than a paper-table replacement.
+- Validation / follow-up: Build and `thermal_mvp_test` passed; an EPYC real
+  DeepOHeat fixed-4 comparison completed. Investigate homogeneous incumbent
+  retention and floorplan/refinement comparability before using Hom-Therm as
+  an improvement claim.

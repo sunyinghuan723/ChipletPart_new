@@ -53,6 +53,7 @@
 #include <memory>
 #include <numeric> // For std::accumulate
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -71,6 +72,15 @@ namespace chiplet {
 #ifndef DISABLE_METIS
 // METIS header is now included through ChipletPart.h
 #endif
+
+void ChipletPart::SetFixedPartitionCount(int count) {
+  if (count <= 0) {
+    throw std::invalid_argument("fixed partition count must be positive");
+  }
+  fixed_partition_count_ = count;
+  num_parts_ = count;
+  chiplets_set_ = {count};
+}
 
 // Helper function to interpret METIS error codes
 #ifndef DISABLE_METIS
@@ -1707,6 +1717,9 @@ void ChipletPart::Partition(
   Console::TableRow({"Reach", std::to_string(reach)}, widths);
   Console::TableRow({"Separation", std::to_string(separation)}, widths);
   Console::TableRow({"Technology", tech}, widths);
+  if (fixed_partition_count_ > 0) {
+    Console::TableRow({"Fixed partitions", std::to_string(fixed_partition_count_)}, widths);
+  }
   std::cout << std::endl;
   
   // Generate the hypergraph from XML files
@@ -2316,6 +2329,14 @@ void ChipletPart::Partition(
             thread_refiner->SetAspectRatios(result_aspect_ratios);
             thread_refiner->SetXLocations(result_x_locations);
             thread_refiner->SetYLocations(result_y_locations);
+          }
+        }
+        if (fixed_partition_count_ > 0) {
+          std::unordered_set<int> active_parts(partition_copy.begin(),
+                                               partition_copy.end());
+          if (final_num_parts != fixed_partition_count_ ||
+              static_cast<int>(active_parts.size()) != fixed_partition_count_) {
+            success = false;
           }
         }
         float final_cost = thread_refiner->GetCostFromScratch(partition_copy);

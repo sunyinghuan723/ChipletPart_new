@@ -91,6 +91,9 @@ public:
     return thermal_config_;
   }
 
+  // Restrict standard homogeneous partition search to one chiplet count.
+  void SetFixedPartitionCount(int count);
+
   // Original method that reads from a hypergraph file
   void ReadChipletGraph(std::string hypergraph_file,
                         std::string chiplet_io_file);
@@ -315,6 +318,7 @@ private:
   // partition specific
   int num_init_parts_ = 50;
   std::vector<int> chiplets_set_ = {1, 2, 3, 4, 5, 6, 7, 8};
+  int fixed_partition_count_ = 0;
   //ChipletRefinerPtr refiner_ = nullptr;
 
   // genetic algorithm specific

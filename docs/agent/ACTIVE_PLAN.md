@@ -46,6 +46,14 @@ The first persistent-service milestone is complete and validated.
 
 ## Completed Small Tasks
 
+- Added fixed-count control for standard homogeneous experiments on 2026-05-23:
+  `run_chiplet_test.sh epyc7282 --fixed-parts 4` now restricts generated and
+  accepted standard-search candidates to four active partitions. A requested
+  EPYC fixed-4 comparison was run under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282`: Hom-Cost
+  post-evaluates to objective `79.009962`, while Hom-Therm selects objective
+  `93.465645` and is also hotter. It was recorded as a negative diagnostic and
+  not adopted into `main.tex`.
 - Refreshed the user-requested EPYC paper experiment on 2026-05-23 using
   `/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/commands.sh`
   and supplemental final-candidate thermal post-evaluations for both cost-only
@@ -167,6 +175,34 @@ refinement, dump final/top candidates" mode is the next low-risk runtime
 improvement.
 
 ## Recent Validation
+
+EPYC homogeneous fixed-4 follow-up validation on 2026-05-23:
+
+```bash
+./run_chiplet_test.sh epyc7282 --seed 1 --fixed-parts 4
+./run_chiplet_test.sh epyc7282 --seed 1 --fixed-parts 4 \
+  --thermal --thermal-budget 300 --thermal-lambda-peak 0.1 \
+  --thermal-device auto --thermal-post-eval-only
+./run_chiplet_test.sh epyc7282 --seed 1 --fixed-parts 4 \
+  --thermal --thermal-budget 300 --thermal-lambda-peak 0.1 \
+  --thermal-device auto --thermal-cache
+```
+
+Result: passed as runs, but failed the adoption criterion. Hom-Cost thermal
+post-evaluation gives objective `79.009962` (`T_max=302.888336 K`), whereas
+Hom-Therm gives objective `93.465645` (`T_max=306.220642 K`). The 55 visited
+Hom-Therm thermal records have minimum reconstructed objective `82.158156791`,
+still worse than the baseline. Outputs are documented at
+`/home/yhsun/Chiplet-Partitioning/experiment_v3_epyc7282/analysis/fixed4_homogeneous_analysis.md`.
+
+```bash
+bash -n run_chiplet_test.sh
+cmake --build build --target chipletPart thermal_mvp_test -j 4
+cd build && ctest -R thermal_mvp_test --output-on-failure
+```
+
+Result: passed; the build emitted the pre-existing Eigen `initParallel()`
+deprecation warning.
 
 EPYC paper-data refresh validation on 2026-05-23:
 
