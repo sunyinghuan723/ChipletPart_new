@@ -40,15 +40,24 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The EPYC homogeneous cost-only final-geometry fix is implemented and validated.
-The existing four-mode summary under
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis` records the
-pre-fix failed Hom-Cost post-evaluation; rerun all four modes before treating
-that summary as current. Resume broader `package_thermal` work unless a new
-experiment request arrives.
+The repaired EPYC four-mode rerun is complete and verified under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. Its summary and
+two-panel final-layout/temperature comparison figure use the legacy
+`2d_power_map` compatibility backend, so they are suitable for this requested
+comparison but are not `package_thermal` signoff. Resume broader
+`package_thermal` work unless a new experiment request arrives.
 
 ## Completed Small Tasks
 
+- Completed a clean repaired EPYC v5 four-mode rerun on 2026-05-26 after
+  removing the previous `experiment_v5_epyc7282` outputs. With seed `42`,
+  budget `300 K`, and `lambda_peak=0.1`, Hom-Cost/Hom-Therm report base costs
+  `83.387100`/`82.660800` and peaks `305.581329 K`/`305.534332 K`;
+  Het-Cost/Het-Therm report base costs `71.289400`/`76.877000` and peaks
+  `305.287170 K`/`305.293365 K`. All four saved final partitions match their
+  selected thermal instances and fields. Summary artifacts and the readable
+  two-panel comparison figure are under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`.
 - Fixed the EPYC Hom-Cost missing-temperature root cause on 2026-05-25.
   Ordinary homogeneous search previously ranked a partition after FM/KL while
   retaining its pre-refinement floorplan success flag and coordinates; the
@@ -61,23 +70,14 @@ experiment request arrives.
   floorplan encountered during annealing. With EPYC seed `42`, no-thermal and
   post-eval-only now select the same valid three-part winner at base cost
   `83.387138`; post-evaluation reports `T_max=305.581329 K` and
-  `T_avg=302.149750 K`. Validation output is preserved in
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only_matched_final_fix`.
-- Completed a user-requested EPYC rerun on 2026-05-25 under
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. The
-  parameterized reproduction script is
-  `experiment_v5_epyc7282/analysis/commands.sh`; it uses seed `42`, budget
-  `300 K`, `lambda_peak=0.1`, heterogeneous nodes `7nm,10nm,45nm`, and the
-  legacy `2d_power_map` compatibility backend. In the pre-fix run, Hom-Cost selects base
-  cost `79.741852`, but its fixed winner has no feasible matching final
-  floorplan for thermal post-evaluation; Hom-Therm produces base cost
-  `81.450300` and peak `305.911407 K`.
-  Het-Cost/Het-Therm produce base costs `75.188100`/`81.334000` and peaks
-  `306.246979 K`/`305.584412 K`. Hom-Therm cannot be thermally compared to
-  exact Hom-Cost; Het-Therm is cooler but has a worse comparable objective
-  than Het-Cost for this stochastic seed. Summary is in the experiment `analysis/` directory; a four-mode
-  temperature figure is intentionally omitted because exact Hom-Cost has no
-  valid thermal field.
+  `T_avg=302.149750 K`. The current clean-rerun output is preserved in
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only`.
+- The pre-fix user-requested EPYC rerun on 2026-05-25 established the original
+  failure symptom: Hom-Cost selected base cost `79.741852`, but that selected
+  final partition had no feasible matching floorplan for thermal
+  post-evaluation. Its experiment output directory was deliberately removed
+  for the clean repaired rerun on 2026-05-26; these values remain historical
+  diagnostic context only.
 - Initially corrected EPYC v5 Hom-Cost ranking on 2026-05-25; superseded by
   matched final-geometry certification above.
   `--thermal-post-eval-only` now preserves original homogeneous cost-only
@@ -85,11 +85,9 @@ experiment request arrives.
   winner. With seed `42`, both no-thermal and post-eval-only select the same
   four-part winner at `79.741852`; post-evaluation cannot produce temperature
   because that fixed final partition remains floorplan-infeasible even with
-  `10000 x 10000` floorplanning. The earlier three-part `83.387138`,
-  `T_max=306.611938 K` result is archived as a feasible-geometry comparison
-  variant at
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only_previous_post_eval_reranked`
-  rather than labeled as the original baseline.
+  `10000 x 10000` floorplanning. The subsequent final-geometry certification
+  fix supersedes this intermediate state; its temporary output was removed in
+  the clean 2026-05-26 rerun.
 - Fixed final-partition thermal post-evaluation geometry on 2026-05-24.
   `ThermalInstanceEncoder` now translates raw floorplanner coordinates to the
   package origin without first clamping negative coordinates, which could
@@ -238,7 +236,7 @@ ctest --test-dir build --output-on-failure
   --thermal --thermal-backend legacy_2d_power_map \
   --thermal-budget 300 --thermal-lambda-peak 0 \
   --thermal-device auto \
-  --thermal-output-dir /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only_matched_final_fix/thermal_post_eval \
+  --thermal-output-dir /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only/thermal_post_eval \
   --thermal-post-eval-only
 ```
 
@@ -251,18 +249,20 @@ legacy DeepOHeat thermal field and reports `T_max=305.581329 K`,
 `10000 x 10000` final-validation attempt with feasible-state retention still
 could not make the stale four-part `79.741852` winner feasible.
 
-Requested EPYC four-mode rerun validation on 2026-05-25:
+Requested clean EPYC four-mode rerun validation on 2026-05-26:
 
 ```bash
 bash /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis/commands.sh
 ```
 
 Result: passed. The output directory contains four final solutions, one
-thermal post-evaluation for each cost-only winner, `304` homogeneous thermal
-search records, `2557` heterogeneous thermal search records, a CSV summary,
-an analysis report, and PNG/PDF comparison figures. The runs used the legacy
-compatibility backend on available RTX 4090 GPU inference; no thermal
-inference failure or fallback was found in the run logs.
+thermal post-evaluation for each cost-only winner, `307` homogeneous thermal
+search records, `3462` heterogeneous thermal search records, a CSV summary,
+an analysis report, and PNG/PDF comparison figures. The four selected
+thermal records exactly match their saved final partition and technology
+files. The runs used the legacy compatibility backend on available RTX 4090
+GPU inference; no thermal inference failure or fallback was found in the run
+logs.
 
 Final-partition post-evaluation geometry fix validation on 2026-05-24:
 
