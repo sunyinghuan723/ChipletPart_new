@@ -21,6 +21,23 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-25, the user requested a new Hom-Cost/Hom-Therm/Het-Cost/Het-Therm
+run using `ChipletPart/test_data/epyc7282`, saved under the requested directory
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100` (the `ga100` output
+name does not describe its EPYC input). The reproducible entry point is
+`experiment_v5_ga100/analysis/commands.sh`, with defaults of seed `42`,
+`T_budget=300 K`, `lambda_peak=0.1`, and heterogeneous technologies
+`7nm,10nm,45nm`. It intentionally fixes the legacy `2d_power_map` backend for
+comparability with prior compatibility reruns, not as `package_thermal`
+signoff. Results: Hom-Cost has base `83.387100`, `T_max=306.611938 K`;
+Hom-Therm has base `81.450300`, `T_max=305.911407 K`; Het-Cost has base
+`75.188100`, `T_max=306.246979 K`; Het-Therm has base `81.334000`,
+`T_max=305.584412 K`. Hom-Therm reduces peak temperature and comparable
+objective; Het-Therm reduces peak temperature but its comparable objective is
+worse than post-evaluated Het-Cost for this seed. Artifacts are in
+`experiment_v5_ga100/analysis/summary.csv`, `analysis.md`, and
+`figures/epyc7282_partition_temperature_comparison.{png,pdf}`.
+
 On 2026-05-24, the requested five-benchmark v4 rerun exposed a blocker in
 cost-only final-candidate thermal post-evaluation after the overlap-validation
 change: homogeneous post-eval paired a refined partition with stale
@@ -534,6 +551,20 @@ This Dataset V3 pilot is useful for pipeline and small-surrogate debugging, but
 it is still single-benchmark and not a final paper-scale dataset.
 
 ## Recent Validation
+
+Requested EPYC four-mode rerun validation on 2026-05-25:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_ga100/analysis/commands.sh
+```
+
+Result: passed. It produced four final solutions with comparable thermal data:
+cost-only runs each contain one final post-evaluation; thermal-aware
+homogeneous and heterogeneous runs contain `304` and `2557` thermal records,
+respectively. The generated report records the soft-budget outcome (`4/4`
+selected candidates remain above `300 K`) and runtime overhead (`7.87x`
+homogeneous and `10.22x` heterogeneous); log scanning found no inference
+failure or fallback.
 
 Final-partition post-evaluation geometry fix validation on 2026-05-24:
 

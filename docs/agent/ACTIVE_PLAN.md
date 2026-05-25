@@ -40,12 +40,25 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Run the requested five-benchmark `experiment_v4_*` refresh using thermally
-comparable Hom-Cost/Hom-Therm/Het-Cost/Het-Therm outputs, cost-only final
-post-evaluation, and per-benchmark comparison figures/reports.
+The requested EPYC four-mode rerun stored under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100` is complete. Resume
+the broader paper-scale `package_thermal` work unless a new experiment request
+arrives.
 
 ## Completed Small Tasks
 
+- Completed a user-requested EPYC rerun on 2026-05-25 under the explicitly
+  requested output path `/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100`
+  (despite the directory name, the input is `test_data/epyc7282`). The
+  parameterized reproduction script is
+  `experiment_v5_ga100/analysis/commands.sh`; it uses seed `42`, budget
+  `300 K`, `lambda_peak=0.1`, heterogeneous nodes `7nm,10nm,45nm`, and the
+  legacy `2d_power_map` compatibility backend. Hom-Cost/Hom-Therm produce
+  base costs `83.387100`/`81.450300` and peaks `306.611938 K`/`305.911407 K`.
+  Het-Cost/Het-Therm produce base costs `75.188100`/`81.334000` and peaks
+  `306.246979 K`/`305.584412 K`. Hom-Therm improves the comparable objective;
+  Het-Therm is cooler but has a worse comparable objective for this stochastic
+  seed. Summary and figures are in the experiment `analysis/` directory.
 - Fixed final-partition thermal post-evaluation geometry on 2026-05-24.
   `ThermalInstanceEncoder` now translates raw floorplanner coordinates to the
   package origin without first clamping negative coordinates, which could
@@ -176,12 +189,24 @@ post-evaluation, and per-benchmark comparison figures/reports.
 
 ## Next Small Verifiable Task
 
-Complete the requested `experiment_v4_*` result generation and verify that
-each benchmark contains four final solutions, two cost-only post-evaluations,
-one summary, one analysis report, and its partition/temperature comparison
-figure.
+Continue toward reliable `package_thermal` paper experiments with stronger
+labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
+as compatibility results.
 
 ## Recent Validation
+
+Requested EPYC four-mode rerun validation on 2026-05-25:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_ga100/analysis/commands.sh
+```
+
+Result: passed. The output directory contains four final solutions, one
+thermal post-evaluation for each cost-only winner, `304` homogeneous thermal
+search records, `2557` heterogeneous thermal search records, a CSV summary,
+an analysis report, and PNG/PDF comparison figures. The runs used the legacy
+compatibility backend on available RTX 4090 GPU inference; no thermal
+inference failure or fallback was found in the run logs.
 
 Final-partition post-evaluation geometry fix validation on 2026-05-24:
 
