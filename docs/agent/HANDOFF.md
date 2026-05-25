@@ -22,10 +22,9 @@ revalidation.
 ## Current Task
 
 On 2026-05-25, the user requested a new Hom-Cost/Hom-Therm/Het-Cost/Het-Therm
-run using `ChipletPart/test_data/epyc7282`, saved under the requested directory
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100` (the `ga100` output
-name does not describe its EPYC input). The reproducible entry point is
-`experiment_v5_ga100/analysis/commands.sh`, with defaults of seed `42`,
+run using `ChipletPart/test_data/epyc7282`, saved under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. The reproducible
+entry point is `experiment_v5_epyc7282/analysis/commands.sh`, with defaults of seed `42`,
 `T_budget=300 K`, `lambda_peak=0.1`, and heterogeneous technologies
 `7nm,10nm,45nm`. It intentionally fixes the legacy `2d_power_map` backend for
 comparability with prior compatibility reruns, not as `package_thermal`
@@ -35,8 +34,20 @@ Hom-Therm has base `81.450300`, `T_max=305.911407 K`; Het-Cost has base
 `T_max=305.584412 K`. Hom-Therm reduces peak temperature and comparable
 objective; Het-Therm reduces peak temperature but its comparable objective is
 worse than post-evaluated Het-Cost for this seed. Artifacts are in
-`experiment_v5_ga100/analysis/summary.csv`, `analysis.md`, and
+`experiment_v5_epyc7282/analysis/summary.csv`, `analysis.md`, and
 `figures/epyc7282_partition_temperature_comparison.{png,pdf}`.
+
+Follow-up diagnosis on 2026-05-25 established that the EPYC v5 Hom-Cost row
+is not a strict original-ChipletPart baseline. It was executed with
+`--thermal-post-eval-only`, and standard homogeneous code currently reruns
+floorplanning for each refined final partition before final ranking whenever
+thermal is enabled. A separate strict no-thermal command,
+`./run_chiplet_test.sh epyc7282 --seed 42`, selects a four-part candidate at
+cost `79.741852`, below Hom-Therm's reported base cost `81.450310`. Thus the
+apparent inverted ordering arose from the post-evaluation comparison path, not
+from the strict original cost baseline. Independently, FM/KL is heuristic, so
+thermal-guided and cost-only trajectories do not have a general global-order
+guarantee.
 
 On 2026-05-24, the requested five-benchmark v4 rerun exposed a blocker in
 cost-only final-candidate thermal post-evaluation after the overlap-validation
@@ -555,7 +566,7 @@ it is still single-benchmark and not a final paper-scale dataset.
 Requested EPYC four-mode rerun validation on 2026-05-25:
 
 ```bash
-bash /home/yhsun/Chiplet-Partitioning/experiment_v5_ga100/analysis/commands.sh
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis/commands.sh
 ```
 
 Result: passed. It produced four final solutions with comparable thermal data:

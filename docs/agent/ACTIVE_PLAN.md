@@ -41,17 +41,16 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 ## Active Small Task
 
 The requested EPYC four-mode rerun stored under
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100` is complete. Resume
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282` is complete. Resume
 the broader paper-scale `package_thermal` work unless a new experiment request
 arrives.
 
 ## Completed Small Tasks
 
-- Completed a user-requested EPYC rerun on 2026-05-25 under the explicitly
-  requested output path `/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100`
-  (despite the directory name, the input is `test_data/epyc7282`). The
+- Completed a user-requested EPYC rerun on 2026-05-25 under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. The
   parameterized reproduction script is
-  `experiment_v5_ga100/analysis/commands.sh`; it uses seed `42`, budget
+  `experiment_v5_epyc7282/analysis/commands.sh`; it uses seed `42`, budget
   `300 K`, `lambda_peak=0.1`, heterogeneous nodes `7nm,10nm,45nm`, and the
   legacy `2d_power_map` compatibility backend. Hom-Cost/Hom-Therm produce
   base costs `83.387100`/`81.450300` and peaks `306.611938 K`/`305.911407 K`.
@@ -59,6 +58,15 @@ arrives.
   `306.246979 K`/`305.584412 K`. Hom-Therm improves the comparable objective;
   Het-Therm is cooler but has a worse comparable objective for this stochastic
   seed. Summary and figures are in the experiment `analysis/` directory.
+- Diagnosed the EPYC v5 Hom-Cost comparison on 2026-05-25. The recorded
+  Hom-Cost row (`83.387138`) was run with `--thermal-post-eval-only`; in
+  standard homogeneous mode, that option rebuilds final floorplan geometry
+  before result ranking, so it is not identical to original no-thermal
+  ChipletPart. A strict no-thermal `./run_chiplet_test.sh epyc7282 --seed 42`
+  check selects a four-part solution with cost `79.741852`, which is below
+  Hom-Therm's base cost `81.450310`. Thermal-aware FM/KL is also heuristic and
+  can follow a different trajectory, so global-minimum ordering is not
+  guaranteed without an exhaustive or otherwise controlled baseline.
 - Fixed final-partition thermal post-evaluation geometry on 2026-05-24.
   `ThermalInstanceEncoder` now translates raw floorplanner coordinates to the
   package origin without first clamping negative coordinates, which could
@@ -198,7 +206,7 @@ as compatibility results.
 Requested EPYC four-mode rerun validation on 2026-05-25:
 
 ```bash
-bash /home/yhsun/Chiplet-Partitioning/experiment_v5_ga100/analysis/commands.sh
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis/commands.sh
 ```
 
 Result: passed. The output directory contains four final solutions, one
