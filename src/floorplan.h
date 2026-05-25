@@ -241,6 +241,10 @@ class SACore
       pre_macros_ = macros;
     }
 
+    void setRetainBestFeasible(bool retain) {
+      retain_best_feasible_ = retain;
+    }
+
   private:
     void calPenalty();
     float calNetPenalty() const;
@@ -329,13 +333,13 @@ class SACore
     float norm_net_penalty_ = 0.0;
 
     float net_reach_penalty_acc_ = 0.01;
+    bool retain_best_feasible_ = false;
 
     std::vector<float> cost_list_;  // store the cost in the list
     std::vector<float> T_list_;     // store the temperature
 };
 
 using SACorePtr = std::shared_ptr<SACore>;
-
 
 
 

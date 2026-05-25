@@ -458,6 +458,9 @@ public:
   void SetGWTWTopK(int k) { gwtw_top_k_ = k; }
   void SetGWTWTempDerateFactor(float factor) { gwtw_temp_derate_factor_ = factor; }
   void SetGWTWTopKRatio(const std::vector<float>& ratio) { gwtw_top_k_ratio_ = ratio; }
+  void SetRetainBestFeasibleFloorplan(bool retain) {
+    retain_best_feasible_floorplan_ = retain;
+  }
 
 private:
   bool Terminate(std::deque<float> &history, float &new_cost);
@@ -643,6 +646,7 @@ private:
   unsigned init_seed_ = 0;
   float max_cooling_rate_ = 0.99;
   float min_cooling_rate_ = 0.9;
+  bool retain_best_feasible_floorplan_ = false;
   std::vector<int> reaches_;
   std::vector<int> local_pos_seq_;
   std::vector<int> local_neg_seq_;

@@ -1059,6 +1059,23 @@ void SACore::run()
   float cost = calNormCost();
   float pre_cost = cost;
   float delta_cost = 0.0;
+  bool has_valid_solution = false;
+  float best_valid_cost = std::numeric_limits<float>::max();
+  std::vector<int> best_valid_pos_seq;
+  std::vector<int> best_valid_neg_seq;
+  std::vector<Chiplet> best_valid_macros;
+  const auto retain_valid_solution = [&](float candidate_cost) {
+    if (retain_best_feasible_ &&
+        net_penalty_ <= net_reach_penalty_acc_ &&
+        (!has_valid_solution || candidate_cost < best_valid_cost)) {
+      has_valid_solution = true;
+      best_valid_cost = candidate_cost;
+      best_valid_pos_seq = pos_seq_;
+      best_valid_neg_seq = neg_seq_;
+      best_valid_macros = macros_;
+    }
+  };
+  retain_valid_solution(cost);
   int step = 1;
   //float temperature = init_temperature_;
   //const float t_factor
@@ -1071,6 +1088,9 @@ void SACore::run()
     for (int i = 0; i < num_perturb_per_step_; i++) {
       perturb();
       cost = calNormCost();
+      // Final validation can request retention of feasible states encountered
+      // before annealing subsequently accepts an invalid one.
+      retain_valid_solution(cost);
       delta_cost = cost - pre_cost;
       const float num = distribution_(generator_);
       const float prob
@@ -1100,8 +1120,13 @@ void SACore::run()
   //std::cout << "SA duration: " << duration.count() << " ms" << std::endl;
   //std::cout << "average runtime per perturbation: " << duration.count() * 1.0 / (max_num_step_ * num_perturb_per_step_) << " ms" << std::endl;
   
+  if (has_valid_solution) {
+    pos_seq_ = std::move(best_valid_pos_seq);
+    neg_seq_ = std::move(best_valid_neg_seq);
+    macros_ = std::move(best_valid_macros);
+  }
+
   // update the final results
   packFloorplan();
   calPenalty();
 }
-

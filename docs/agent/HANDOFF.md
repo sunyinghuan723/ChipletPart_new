@@ -28,7 +28,7 @@ entry point is `experiment_v5_epyc7282/analysis/commands.sh`, with defaults of s
 `T_budget=300 K`, `lambda_peak=0.1`, and heterogeneous technologies
 `7nm,10nm,45nm`. It intentionally fixes the legacy `2d_power_map` backend for
 comparability with prior compatibility reruns, not as `package_thermal`
-signoff. Exact Hom-Cost has base `79.741852` but no valid thermal result
+signoff. In the pre-fix output, Hom-Cost has base `79.741852` but no valid thermal result
 because its fixed winner fails final-floorplan post-evaluation; Hom-Therm has
 base `81.450300`, `T_max=305.911407 K`; Het-Cost has base
 `75.188100`, `T_max=306.246979 K`; Het-Therm has base `81.334000`,
@@ -38,9 +38,33 @@ Het-Therm reduces peak temperature but its comparable objective is worse than
 post-evaluated Het-Cost for this seed. Artifacts are in
 `experiment_v5_epyc7282/analysis/summary.csv` and `analysis.md`; the
 four-mode comparison figure is omitted because exact Hom-Cost has no thermal
-field.
+field. This four-mode summary has not been rerun after the fix described
+below and should not be treated as current.
 
-Follow-up correction on 2026-05-25 established that
+The final repair on 2026-05-25 found why the four-part `79.741852` result
+could not be thermally evaluated: ordinary homogeneous search ranked the
+FM/KL-refined partition using a floorplan success flag and coordinates saved
+before refinement. A scoped final-validation attempt on that fixed partition,
+with `10000 x 10000` annealing and feasible-state retention enabled, still
+found no matching feasible geometry. It is therefore not a legal final
+Hom-Cost candidate.
+
+Homogeneous candidates now receive matching final-floorplan validation after
+FM/KL in both no-thermal and post-eval-only flows. Thermal is still absent
+from Hom-Cost ranking: `--thermal-post-eval-only` evaluates only the already
+selected validity-certified cost-only winner and reuses its matching
+geometry. The floorplanner has a final-validation-only option that retains
+the least-cost feasible state encountered during annealing, rather than
+losing it at an invalid annealing endpoint; `floorplan_retention_test`
+regresses this behavior.
+
+With EPYC seed `42`, repaired no-thermal and post-eval-only flows select the
+same valid three-part candidate at base cost `83.387138`. Post-evaluation
+reports `T_max=305.581329 K` and `T_avg=302.149750 K`; its saved validation
+artifact is
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only_matched_final_fix`.
+
+The intermediate correction on 2026-05-25 established that
 `--thermal-post-eval-only` must not change the homogeneous cost-only ranking.
 It now selects exactly as original no-thermal ChipletPart and attempts
 matching final geometry only after fixing that winner. With seed `42`, both
@@ -64,9 +88,10 @@ thermal evaluation was enabled and preserved raw coordinates until origin
 translation. Its real EPYC post-eval smoke succeeded with a 3-part
 geometry-feasible winner (`base=84.825104`, `T_max=307.117035 K`,
 `T_avg=301.992432 K`). The subsequent 2026-05-25 correction retains that
-matched-geometry requirement but applies it after original cost-only winner
-selection for post-eval-only runs, so a fixed infeasible winner yields no
-temperature rather than changing the baseline.
+matched-geometry requirement but initially applied it after original
+cost-only winner selection for post-eval-only runs. The final repair above
+applies final-geometry validity consistently to no-thermal and post-eval-only
+Hom-Cost selection.
 
 On 2026-05-23, a follow-up EPYC homogeneous experiment added
 `--fixed-parts <count>` to standard partitioning and ran both Hom-Cost and

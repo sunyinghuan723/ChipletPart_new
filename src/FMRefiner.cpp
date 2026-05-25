@@ -330,6 +330,7 @@ ChipletRefiner::Floorplanner(int max_steps, int perturbations,
             per_worker_perturbations,        // num_perturb_per_step - reduce perturbations
             worker_cooling_rate,             // cooling_rate
             init_seed_ + worker_id);         // seed
+        sa->setRetainBestFeasible(retain_best_feasible_floorplan_);
               
                   
         sa->setPosSeq(pos_seq);

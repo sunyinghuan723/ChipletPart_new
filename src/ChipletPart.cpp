@@ -2318,11 +2318,14 @@ void ChipletPart::Partition(
         }
         
         int final_num_parts = *std::max_element(partition_copy.begin(), partition_copy.end()) + 1;
-        // Thermal-aware ranking needs geometry for the refined final
-        // partition. Post-eval-only must preserve original cost-only ranking.
-        if (thermal_search_enabled && floorplanning) {
+        // Every reported candidate needs geometry matching the partition left
+        // by FM/KL. Otherwise a refined partition can inherit a stale
+        // pre-refinement feasibility result.
+        if (floorplanning) {
+          thread_refiner->SetRetainBestFeasibleFloorplan(true);
           auto final_floor_result = thread_refiner->RunFloorplanner(
               partition_copy, hypergraph_, 200, 50, 0.00001);
+          thread_refiner->SetRetainBestFeasibleFloorplan(false);
           result_aspect_ratios = std::get<0>(final_floor_result);
           result_x_locations = std::get<1>(final_floor_result);
           result_y_locations = std::get<2>(final_floor_result);
@@ -2487,32 +2490,20 @@ void ChipletPart::Partition(
         best_result.x_locations.size() >= static_cast<size_t>(best_result.num_parts) &&
         best_result.y_locations.size() >= static_cast<size_t>(best_result.num_parts);
     if (thermal_config_.enable_thermal && thermal_config_.thermal_post_eval_only) {
-      std::vector<int> post_eval_partition = best_partition;
-      refiner->SetNumParts(best_result.num_parts);
-      auto post_eval_floor_result = refiner->RunFloorplanner(
-          post_eval_partition, hypergraph_, 10000, 10000, 0.00001);
-      const auto& post_eval_aspect_ratios = std::get<0>(post_eval_floor_result);
-      const auto& post_eval_x_locations = std::get<1>(post_eval_floor_result);
-      const auto& post_eval_y_locations = std::get<2>(post_eval_floor_result);
-      const bool post_eval_floorplan_ready =
-          std::get<3>(post_eval_floor_result) &&
-          post_eval_aspect_ratios.size() >= static_cast<size_t>(best_result.num_parts) &&
-          post_eval_x_locations.size() >= static_cast<size_t>(best_result.num_parts) &&
-          post_eval_y_locations.size() >= static_cast<size_t>(best_result.num_parts);
       Console::Info(
-          std::string("Final floorplanner results for fixed cost-only winner: ") +
-          (post_eval_floorplan_ready ? "Yes" : "No"));
-      if (post_eval_floorplan_ready) {
+          std::string("Matched final floorplanner results for fixed cost-only winner: ") +
+          (stored_floorplan_ready ? "Yes" : "No"));
+      if (stored_floorplan_ready) {
         ThermalAwareEvaluator post_eval_evaluator(
             thermal_config_, chiplet_io_file, chiplet_netlist_file, chiplet_blocks_file);
         std::vector<std::string> post_eval_tech(best_result.num_parts, tech);
         auto thermal_eval = post_eval_evaluator.Evaluate(
             best_result.cost,
-            post_eval_partition,
+            best_partition,
             post_eval_tech,
-            post_eval_aspect_ratios,
-            post_eval_x_locations,
-            post_eval_y_locations,
+            best_result.aspect_ratios,
+            best_result.x_locations,
+            best_result.y_locations,
             true);
         Console::Subheader("Post-eval Thermal Results");
         Console::TableHeader(result_columns, result_widths);
@@ -2528,8 +2519,8 @@ void ChipletPart::Partition(
         std::cout << std::endl;
       } else {
         Console::Warning(
-            "Skipping post-eval thermal evaluation because the fixed original "
-            "cost-only winner has no feasible matching final floorplan.");
+            "Skipping post-eval thermal evaluation because no refined "
+            "cost-only candidate has a matching feasible final floorplan.");
       }
     } else {
       Console::Info(std::string("Floorplanner results: ") +

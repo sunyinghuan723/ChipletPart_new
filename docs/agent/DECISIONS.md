@@ -396,7 +396,7 @@ methodology, or experiment-policy decision is made.
 - Decision: `--thermal-post-eval-only` must preserve the original homogeneous
   cost-only ranking. After that winner is selected, it may report thermal
   data only if a newly constructed matching final floorplan is feasible.
-- Status: Accepted
+- Status: Superseded by ADR-0022
 - Context: On EPYC with seed `42`, the historical no-thermal path reported a
   four-part cost `79.741852`, while the post-evaluation path reported
   `83.387138` because it re-ranked candidates after thermal-enabled final
@@ -411,3 +411,35 @@ methodology, or experiment-policy decision is made.
   seed-`42` no-thermal and post-eval-only runs select byte-identical
   four-part partitions at base cost `79.741852`; post-evaluation emits no
   thermal field because the matching final floorplan is infeasible.
+
+## ADR-0022: Certify Homogeneous Cost Candidates With Matching Final Geometry
+
+- Date: 2026-05-25
+- Decision: After FM/KL refinement, every standard homogeneous candidate must
+  receive a final floorplan generated for that refined partition before it is
+  eligible for cost-only ranking. `--thermal-post-eval-only` evaluates the
+  validity-certified cost-only winner's stored matching geometry and does not
+  introduce a thermal ranking term.
+- Status: Accepted
+- Context: ADR-0021 exposed that the historical EPYC seed-`42` four-part
+  `79.741852` winner could not be final-floorplanned. Inspection showed the
+  no-thermal path retained floorplan coordinates and success from before
+  FM/KL modified the partition. A `10000 x 10000` final-floorplan diagnostic,
+  enhanced to retain any feasible SA state encountered, still found no valid
+  geometry for that fixed four-part partition. It was therefore an
+  incorrectly certified result rather than a valid baseline that merely
+  lacked temperature output.
+- Implementation policy: Final-validation floorplanning may retain the
+  lowest-cost feasible state visited during simulated annealing so a later
+  invalid endpoint cannot erase an already discovered legal layout. This
+  retention is opt-in for final validation; it is not enabled for the
+  ordinary refinement trajectory.
+- Consequences: Both no-thermal and post-eval-only homogeneous flows apply the
+  same physical-feasibility gate, preserving cost-only ordering among valid
+  final candidates while excluding stale-geometry candidates. Historical v5
+  summaries generated before this fix must be rerun before use.
+- Validation / follow-up: `floorplan_retention_test` and `thermal_mvp_test`
+  pass. For EPYC seed `42`, no-thermal and post-eval-only choose the same
+  three-part candidate at base cost `83.387138`; the post-evaluation produces
+  `T_max=305.581329 K` and `T_avg=302.149750 K` under the legacy
+  compatibility backend.

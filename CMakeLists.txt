@@ -165,6 +165,14 @@ if(BUILD_THERMAL_TESTS AND BUILD_COST_MODEL)
     add_test(NAME thermal_mvp_test
              COMMAND thermal_mvp_test ${PROJECT_SOURCE_DIR}/test_data/48_1_14_4_1600_1600)
 
+    add_executable(floorplan_retention_test
+        src/test/test_floorplan_retention.cpp
+        src/floorplan.cpp
+        src/floorplan.h)
+
+    add_test(NAME floorplan_retention_test
+             COMMAND floorplan_retention_test)
+
     add_executable(thermal_collect_cli
         src/test/thermal_collect_cli.cpp
         src/ThermalAwareEvaluator.cpp
