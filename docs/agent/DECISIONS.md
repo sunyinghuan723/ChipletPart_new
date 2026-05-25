@@ -389,3 +389,25 @@ methodology, or experiment-policy decision is made.
   `thermal_mvp_test`; build and `ctest -R thermal_mvp_test` passed. A real
   GA100 Hom-Cost post-evaluation completed with one thermal field and reports
   `base=32.704578`, `T_max=307.324463 K`, `T_avg=303.450958 K`.
+
+## ADR-0021: Preserve Original Homogeneous Cost Ranking During Post-Evaluation
+
+- Date: 2026-05-25
+- Decision: `--thermal-post-eval-only` must preserve the original homogeneous
+  cost-only ranking. After that winner is selected, it may report thermal
+  data only if a newly constructed matching final floorplan is feasible.
+- Status: Accepted
+- Context: On EPYC with seed `42`, the historical no-thermal path reported a
+  four-part cost `79.741852`, while the post-evaluation path reported
+  `83.387138` because it re-ranked candidates after thermal-enabled final
+  floorplanning. A final floorplan attempt on the fixed original winner,
+  including a `10000 x 10000` run, does not produce feasible geometry.
+- Consequences: Hom-Cost remains the original base-cost winner even if its
+  thermal output is unavailable. Reports must use `N/A` rather than silently
+  substituting a more expensive thermally evaluable candidate. A separate
+  feasible-geometry variant may be retained for diagnosis, but it is not the
+  original baseline.
+- Validation / follow-up: Build and `thermal_mvp_test` passed. Matching EPYC
+  seed-`42` no-thermal and post-eval-only runs select byte-identical
+  four-part partitions at base cost `79.741852`; post-evaluation emits no
+  thermal field because the matching final floorplan is infeasible.
