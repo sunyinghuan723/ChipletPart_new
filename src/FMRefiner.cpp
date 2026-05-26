@@ -662,7 +662,7 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
             SetXLocations(std::get<1>(fp_tuple));
             SetYLocations(std::get<2>(fp_tuple));
           }
-          if (ThermalEvaluationEnabled()) {
+          if (RequiresFeasibleFloorplanForObjective()) {
             RefreshCurrentObjective(solution, success);
           }
           
@@ -679,7 +679,7 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
         Pass(hgraph, upper_block_balance, lower_block_balance,
              cur_block_balance, net_degs, solution, visited_vertices_flag);
 
-    if (ThermalEvaluationEnabled() && floorplanner_) {
+    if (RequiresFeasibleFloorplanForObjective() && floorplanner_) {
       auto fp_tuple = RunFloorplanner(solution, hgraph, 200, 50, 1.0);
       const bool success = std::get<3>(fp_tuple);
       if (success) {
@@ -699,7 +699,8 @@ void ChipletRefiner::Refine(const HGraphPtr &hgraph,
     if (gain <= 0.0) {
       return; // stop if there is no improvement
     }
-    if (cost_model_initialized_ && libraryDicts_ != nullptr) {
+    if (cost_model_initialized_ && libraryDicts_ != nullptr &&
+        !RequiresFeasibleFloorplanForObjective()) {
       legacy_cost_ = RefreshCurrentObjective(solution, true);
     }
   }
@@ -793,17 +794,17 @@ float ChipletRefiner::Pass(
     // Get destination partition after the move
     const int to_part = candidate->GetDestinationPart();
 
-    if (ThermalMoveEvaluationEnabled()) {
+    if (FloorplanConstrainedMoveEvaluationEnabled()) {
       Partition candidate_partition = solution;
       candidate_partition[vertex] = to_part;
       const float candidate_objective = GetObjectiveFromScratch(
           candidate_partition, hgraph, true, true, 50, 10, 0.00001f, true);
-      float thermal_gain = -std::numeric_limits<float>::max() / 4.0f;
+      float objective_gain = -std::numeric_limits<float>::max() / 4.0f;
       if (std::isfinite(candidate_objective) &&
           candidate_objective < std::numeric_limits<float>::max() - 1.0f) {
-        thermal_gain = legacy_cost_ - candidate_objective;
+        objective_gain = legacy_cost_ - candidate_objective;
       }
-      candidate->SetGain(thermal_gain);
+      candidate->SetGain(objective_gain);
     }
 
     // Update cost tracking
@@ -2236,7 +2237,7 @@ float ChipletRefiner::GetBaseCostWithFloorplan(
 float ChipletRefiner::RefreshCurrentObjective(
     const std::vector<int>& partition,
     bool floorplan_success) {
-  if (ThermalEvaluationEnabled() && !floorplan_success) {
+  if (RequiresFeasibleFloorplanForObjective() && !floorplan_success) {
     legacy_cost_ = std::numeric_limits<float>::max();
     return legacy_cost_;
   }
@@ -2284,6 +2285,9 @@ float ChipletRefiner::GetObjectiveFromScratch(
   const float base_cost = GetBaseCostWithFloorplan(
       partition, eval_aspect_ratios, eval_x_locations, eval_y_locations,
       approx_state);
+  if (!floorplan_success && RequiresFeasibleFloorplanForObjective()) {
+    return std::numeric_limits<float>::max();
+  }
   if (!ThermalEvaluationEnabled()) {
     return base_cost;
   }

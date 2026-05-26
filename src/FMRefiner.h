@@ -179,12 +179,30 @@ public:
     thermal_refinement_moves_ = evaluate_refinement_moves;
   }
 
+  void SetFloorplanConstrainedCostEvaluation(bool enabled) {
+    floorplan_constrained_cost_evaluation_ = enabled;
+  }
+
   bool ThermalEvaluationEnabled() const {
     return thermal_evaluator_ != nullptr && thermal_evaluator_->Enabled();
   }
 
   bool ThermalMoveEvaluationEnabled() const {
     return ThermalEvaluationEnabled() && thermal_refinement_moves_;
+  }
+
+  bool FloorplanConstrainedCostEvaluationEnabled() const {
+    return floorplan_constrained_cost_evaluation_;
+  }
+
+  bool FloorplanConstrainedMoveEvaluationEnabled() const {
+    return FloorplanConstrainedCostEvaluationEnabled() ||
+           ThermalMoveEvaluationEnabled();
+  }
+
+  bool RequiresFeasibleFloorplanForObjective() const {
+    return FloorplanConstrainedCostEvaluationEnabled() ||
+           ThermalEvaluationEnabled();
   }
 
   float GetCurrentObjective() const { return legacy_cost_; }
@@ -669,6 +687,7 @@ private:
   std::vector<float> y_locations_;
   std::shared_ptr<ThermalAwareEvaluator> thermal_evaluator_;
   bool thermal_refinement_moves_ = false;
+  bool floorplan_constrained_cost_evaluation_ = false;
   bool approx_state_ = 0;
   // tally global runtime
   mutable float total_cost_model_time_ = 0.0;

@@ -31,7 +31,8 @@ the repaired binary was rerun through
 `2d_power_map` backend for compatibility with prior reruns, not as
 `package_thermal` signoff.
 
-The clean v5 output is current. Hom-Cost reports base `83.387100`,
+The clean v5 output below is superseded pending regeneration after the
+floorplan-constrained Hom-Cost correction. It reported Hom-Cost base `83.387100`,
 `T_max=305.581329 K`, and `T_avg=302.149750 K`; Hom-Therm reports base
 `82.660800`, `T_max=305.534332 K`, and `T_avg=301.782715 K`. Het-Cost
 reports base `71.289400`, `T_max=305.287170 K`, and `T_avg=301.108185 K`;
@@ -40,9 +41,10 @@ Het-Therm reports base `76.877000`, `T_max=305.293365 K`, and
 their saved final partition and technology assignment files. Current
 artifacts are `experiment_v5_epyc7282/analysis/summary.csv`, `analysis.md`,
 and `analysis/figures/epyc7282_partition_temperature_comparison.png` (plus
-PDF). For this seed, homogeneous thermal-aware search slightly improves peak
-temperature and comparable objective; heterogeneous thermal-aware search does
-not improve either metric over its post-evaluated cost-only result.
+PDF). For this seed, homogeneous thermal-aware search appeared to improve peak
+temperature and comparable objective; heterogeneous thermal-aware search did
+not improve either metric over its post-evaluated cost-only result. Do not use
+that summary or figure as a current comparison.
 
 The final repair on 2026-05-25 found why the four-part `79.741852` result
 could not be thermally evaluated: ordinary homogeneous search ranked the
@@ -61,8 +63,23 @@ the least-cost feasible state encountered during annealing, rather than
 losing it at an invalid annealing endpoint; `floorplan_retention_test`
 regresses this behavior.
 
-With EPYC seed `42`, repaired no-thermal and post-eval-only flows select the
-same valid three-part candidate at base cost `83.387138`. Post-evaluation
+On 2026-05-26, inspecting the new four-mode result exposed a second
+comparability issue: its valid Hom-Cost candidate had base cost `83.387138`,
+while Hom-Therm found a valid candidate with lower base cost `82.660767`.
+Both paths begin from the same retained initial candidates, but Hom-Cost
+previously followed base-cost FM/KL moves without checking floorplan
+feasibility until the endpoint; it could therefore lose a lower-cost valid
+trajectory after ending at an invalid geometry. Hom-Cost refinement now uses
+floorplanning as a move-feasibility constraint while keeping thermal out of
+its ranking. Temporary EPYC seed-`42` runs confirm that no-thermal,
+post-eval-only, and Hom-Therm all select the same valid four-part solution at
+base cost `82.660767`; its thermal metrics are `T_max=305.534332 K` and
+`T_avg=301.782715 K`. The complete v5 output must be regenerated after this
+change.
+
+Under the now-superseded ADR-0022 endpoint-only validation step, EPYC seed
+`42` no-thermal and post-eval-only flows selected the same valid three-part
+candidate at base cost `83.387138`. Post-evaluation
 reports `T_max=305.581329 K` and `T_avg=302.149750 K`; its saved validation
 artifact is
 `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only`

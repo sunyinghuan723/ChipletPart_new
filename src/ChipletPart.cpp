@@ -2210,6 +2210,10 @@ void ChipletPart::Partition(
       );
       if (thermal_evaluator && thermal_evaluator->Enabled()) {
         thread_refiner->SetThermalEvaluator(thermal_evaluator, true);
+      } else if (floorplanning) {
+        // A cost-only baseline must optimize over candidates that have a
+        // matching legal floorplan, not discard invalid endpoints afterward.
+        thread_refiner->SetFloorplanConstrainedCostEvaluation(true);
       }
 
       if (hypergraph_->GetNumVertices() > 200) {

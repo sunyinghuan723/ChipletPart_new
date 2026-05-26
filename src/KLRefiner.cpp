@@ -185,7 +185,7 @@ void KLRefiner::Refine(const HGraphPtr& hgraph,
           cost_evaluator_->SetXLocations(std::get<1>(fp_result));
           cost_evaluator_->SetYLocations(std::get<2>(fp_result));
         }
-        if (cost_evaluator_->ThermalEvaluationEnabled()) {
+        if (cost_evaluator_->RequiresFeasibleFloorplanForObjective()) {
           cost_evaluator_->RefreshCurrentObjective(solution, success);
         }
       }
@@ -207,7 +207,7 @@ void KLRefiner::Refine(const HGraphPtr& hgraph,
     total_improvement += improvement;
 
     if (floorplanner_ && cost_evaluator_ &&
-        cost_evaluator_->ThermalEvaluationEnabled()) {
+        cost_evaluator_->RequiresFeasibleFloorplanForObjective()) {
       auto fp_result = RunFloorplanner(
           solution, hgraph, max_fp_steps_, max_fp_perturbations_, 0.95);
       const bool success = std::get<3>(fp_result);
@@ -282,7 +282,8 @@ float KLRefiner::KLPass(const HGraphPtr& hgraph,
     int block_b = solution[vertex_b];
     float swap_gain = CalculateSwapGain(hgraph, vertex_a, block_a, vertex_b, block_b, solution, net_degs);
     float selected_objective_after = std::numeric_limits<float>::quiet_NaN();
-    if (cost_evaluator_ && cost_evaluator_->ThermalMoveEvaluationEnabled()) {
+    if (cost_evaluator_ &&
+        cost_evaluator_->FloorplanConstrainedMoveEvaluationEnabled()) {
       Partition test_solution = solution;
       test_solution[vertex_a] = block_b;
       test_solution[vertex_b] = block_a;
@@ -310,7 +311,8 @@ float KLRefiner::KLPass(const HGraphPtr& hgraph,
     
     // Execute the swap
     ExecuteSwap(hgraph, vertex_a, vertex_b, block_balance, net_degs, solution);
-    if (cost_evaluator_ && cost_evaluator_->ThermalMoveEvaluationEnabled() &&
+    if (cost_evaluator_ &&
+        cost_evaluator_->FloorplanConstrainedMoveEvaluationEnabled() &&
         std::isfinite(selected_objective_after) &&
         selected_objective_after < std::numeric_limits<float>::max() - 1.0f) {
       cost_evaluator_->SetLegacyCost(selected_objective_after);

@@ -40,15 +40,26 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The repaired EPYC four-mode rerun is complete and verified under
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. Its summary and
-two-panel final-layout/temperature comparison figure use the legacy
-`2d_power_map` compatibility backend, so they are suitable for this requested
-comparison but are not `package_thermal` signoff. Resume broader
-`package_thermal` work unless a new experiment request arrives.
+The EPYC homogeneous baseline needs one further correction: endpoint-only
+final-floorplan validation allowed Hom-Therm to find a legal solution with a
+lower base cost than Hom-Cost. Floorplan-constrained Hom-Cost refinement is
+implemented and locally validated; regenerate
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282` before using its
+summary or figure. This experiment uses the legacy `2d_power_map`
+compatibility backend, not `package_thermal` signoff.
 
 ## Completed Small Tasks
 
+- Fixed the EPYC Hom-Cost baseline ordering inconsistency on 2026-05-26.
+  Under endpoint-only final validation, Hom-Cost reported a legal
+  three-part `83.387138` solution while Hom-Therm found a legal four-part
+  solution with lower base cost `82.660767`: Hom-Cost had discarded
+  trajectories only after reaching an invalid final floorplan. Standard
+  homogeneous cost-only refinement now applies floorplan feasibility during
+  FM/KL move scoring while ranking feasible candidates only by base cost. A
+  temporary EPYC seed-`42` validation shows no-thermal, post-eval-only, and
+  Hom-Therm choosing the identical four-part solution at base cost
+  `82.660767`, with `T_max=305.534332 K` and `T_avg=301.782715 K`.
 - Completed a clean repaired EPYC v5 four-mode rerun on 2026-05-26 after
   removing the previous `experiment_v5_epyc7282` outputs. With seed `42`,
   budget `300 K`, and `lambda_peak=0.1`, Hom-Cost/Hom-Therm report base costs
@@ -57,8 +68,11 @@ comparison but are not `package_thermal` signoff. Resume broader
   `305.287170 K`/`305.293365 K`. All four saved final partitions match their
   selected thermal instances and fields. Summary artifacts and the readable
   two-panel comparison figure are under
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`.
-- Fixed the EPYC Hom-Cost missing-temperature root cause on 2026-05-25.
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`. This
+  output is superseded by the baseline-ordering fix above and must be rerun.
+- Implemented the endpoint-only ADR-0022 repair for the EPYC Hom-Cost
+  missing-temperature root cause on 2026-05-25; this step is superseded by
+  the refinement-feasibility correction above.
   Ordinary homogeneous search previously ranked a partition after FM/KL while
   retaining its pre-refinement floorplan success flag and coordinates; the
   reported four-part `79.741852` winner consequently had no matching feasible
@@ -67,8 +81,8 @@ comparison but are not `package_thermal` signoff. Resume broader
   `--thermal-post-eval-only` runs. Thermal post-evaluation reuses the selected
   winner's matching geometry, so thermal still does not rank cost-only
   candidates. A final-validation-only SA option retains the best feasible
-  floorplan encountered during annealing. With EPYC seed `42`, no-thermal and
-  post-eval-only now select the same valid three-part winner at base cost
+  floorplan encountered during annealing. At that intermediate step, EPYC
+  seed `42` no-thermal and post-eval-only selected the same valid three-part winner at base cost
   `83.387138`; post-evaluation reports `T_max=305.581329 K` and
   `T_avg=302.149750 K`. The current clean-rerun output is preserved in
   `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only`.

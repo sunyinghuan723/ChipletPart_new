@@ -420,7 +420,7 @@ methodology, or experiment-policy decision is made.
   eligible for cost-only ranking. `--thermal-post-eval-only` evaluates the
   validity-certified cost-only winner's stored matching geometry and does not
   introduce a thermal ranking term.
-- Status: Accepted
+- Status: Superseded by ADR-0023
 - Context: ADR-0021 exposed that the historical EPYC seed-`42` four-part
   `79.741852` winner could not be final-floorplanned. Inspection showed the
   no-thermal path retained floorplan coordinates and success from before
@@ -443,3 +443,36 @@ methodology, or experiment-policy decision is made.
   three-part candidate at base cost `83.387138`; the post-evaluation produces
   `T_max=305.581329 K` and `T_avg=302.149750 K` under the legacy
   compatibility backend.
+
+## ADR-0023: Apply Final-Floorplan Feasibility During Hom-Cost Refinement
+
+- Date: 2026-05-26
+- Decision: Homogeneous cost-only FM/KL refinement must reject move endpoints
+  without a matching feasible floorplan while continuing to rank feasible
+  moves using base cost alone. Thermal post-evaluation remains absent from
+  cost-only ranking.
+- Status: Accepted
+- Context: The ADR-0022 EPYC rerun produced a legal Hom-Cost result at base
+  cost `83.387138`, but Hom-Therm found a legal solution with lower base cost
+  `82.660767`. Both started from the same 18 retained initial partitions.
+  Hom-Cost previously followed unconstrained base-cost moves and validated
+  floorplanning only after FM/KL, so an invalid endpoint could cause a better
+  feasible trajectory to be lost. Hom-Therm already evaluated refinement
+  moves with matching floorplans as part of thermal objective computation.
+- Implementation policy: Add a floorplan-constrained cost-evaluation mode to
+  `ChipletRefiner` and enable it for standard homogeneous non-thermal and
+  post-eval-only search. The mode uses floorplanning only as a feasibility
+  constraint; accepted candidates are still ranked exclusively by base cost.
+  Preserve failed-floorplan objective state rather than refreshing it with
+  stale coordinates in either constrained-cost or thermal refinement.
+- Consequences: Hom-Cost is now a physical-feasibility-constrained cost
+  baseline comparable to Hom-Therm. It costs more runtime than the old
+  endpoint-only validation path. This correction does not turn heuristic
+  refinement into a proof of global optimality.
+- Validation / follow-up: Build, `thermal_mvp_test`, and
+  `floorplan_retention_test` pass. Temporary EPYC seed-`42` no-thermal and
+  post-eval-only runs select the identical four-part solution at base cost
+  `82.660767`; post-evaluation reports `T_max=305.534332 K` and
+  `T_avg=301.782715 K`. A same-binary Hom-Therm run selects the identical
+  partition, geometry, and base cost with penalized objective `85.723648`.
+  Regenerate the complete v5 four-mode outputs before using them.
