@@ -40,13 +40,11 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The EPYC homogeneous baseline needs one further correction: endpoint-only
-final-floorplan validation allowed Hom-Therm to find a legal solution with a
-lower base cost than Hom-Cost. Floorplan-constrained Hom-Cost refinement is
-implemented and locally validated; regenerate
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282` before using its
-summary or figure. This experiment uses the legacy `2d_power_map`
-compatibility backend, not `package_thermal` signoff.
+The corrected EPYC v5 four-mode rerun is complete and verified under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. Hom-Cost now
+performs floorplan-constrained cost refinement and no longer reports a base
+cost above Hom-Therm for this case. The experiment uses the legacy
+`2d_power_map` compatibility backend, not `package_thermal` signoff.
 
 ## Completed Small Tasks
 
@@ -63,13 +61,12 @@ compatibility backend, not `package_thermal` signoff.
 - Completed a clean repaired EPYC v5 four-mode rerun on 2026-05-26 after
   removing the previous `experiment_v5_epyc7282` outputs. With seed `42`,
   budget `300 K`, and `lambda_peak=0.1`, Hom-Cost/Hom-Therm report base costs
-  `83.387100`/`82.660800` and peaks `305.581329 K`/`305.534332 K`;
-  Het-Cost/Het-Therm report base costs `71.289400`/`76.877000` and peaks
-  `305.287170 K`/`305.293365 K`. All four saved final partitions match their
+  `82.660800`/`82.660800` and identical peaks `305.534332 K`;
+  Het-Cost/Het-Therm report base costs `71.312300`/`75.047000` and peaks
+  `306.098022 K`/`305.316711 K`. All four saved final partitions match their
   selected thermal instances and fields. Summary artifacts and the readable
   two-panel comparison figure are under
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`. This
-  output is superseded by the baseline-ordering fix above and must be rerun.
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`.
 - Implemented the endpoint-only ADR-0022 repair for the EPYC Hom-Cost
   missing-temperature root cause on 2026-05-25; this step is superseded by
   the refinement-feasibility correction above.
@@ -84,8 +81,8 @@ compatibility backend, not `package_thermal` signoff.
   floorplan encountered during annealing. At that intermediate step, EPYC
   seed `42` no-thermal and post-eval-only selected the same valid three-part winner at base cost
   `83.387138`; post-evaluation reports `T_max=305.581329 K` and
-  `T_avg=302.149750 K`. The current clean-rerun output is preserved in
-  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only`.
+  `T_avg=302.149750 K`. That intermediate experiment output was removed when
+  the final floorplan-constrained four-mode rerun replaced it.
 - The pre-fix user-requested EPYC rerun on 2026-05-25 established the original
   failure symptom: Hom-Cost selected base cost `79.741852`, but that selected
   final partition had no feasible matching floorplan for thermal
@@ -240,7 +237,7 @@ as compatibility results.
 
 ## Recent Validation
 
-Homogeneous final-geometry certification validation on 2026-05-25:
+Homogeneous floorplan-constrained baseline validation on 2026-05-26:
 
 ```bash
 cmake --build build --target chipletPart thermal_mvp_test floorplan_retention_test thermal_collect_cli -j 4
@@ -256,12 +253,11 @@ ctest --test-dir build --output-on-failure
 
 Result: build passed with the pre-existing Eigen `initParallel()`
 deprecation warning; both CTest tests passed. The no-thermal and
-post-eval-only paths select the identical three-part, matching-final-geometry
-winner with base cost `83.387138`. The post-evaluation persisted one real
-legacy DeepOHeat thermal field and reports `T_max=305.581329 K`,
-`T_avg=302.149750 K`; inference used `cuda:0`. Before the fix, a scoped
-`10000 x 10000` final-validation attempt with feasible-state retention still
-could not make the stale four-part `79.741852` winner feasible.
+post-eval-only paths select the identical four-part, matching-final-geometry
+winner with base cost `82.660767`. Hom-Therm selects that identical solution
+with penalized objective `85.723648`. The post-evaluation persisted one real
+legacy DeepOHeat thermal field and reports `T_max=305.534332 K`,
+`T_avg=301.782715 K`; inference used `cuda:0`.
 
 Requested clean EPYC four-mode rerun validation on 2026-05-26:
 
@@ -271,7 +267,7 @@ bash /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis/commands.s
 
 Result: passed. The output directory contains four final solutions, one
 thermal post-evaluation for each cost-only winner, `307` homogeneous thermal
-search records, `3462` heterogeneous thermal search records, a CSV summary,
+search records, `2816` heterogeneous thermal search records, a CSV summary,
 an analysis report, and PNG/PDF comparison figures. The four selected
 thermal records exactly match their saved final partition and technology
 files. The runs used the legacy compatibility backend on available RTX 4090

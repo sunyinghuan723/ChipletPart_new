@@ -475,4 +475,5 @@ methodology, or experiment-policy decision is made.
   `82.660767`; post-evaluation reports `T_max=305.534332 K` and
   `T_avg=301.782715 K`. A same-binary Hom-Therm run selects the identical
   partition, geometry, and base cost with penalized objective `85.723648`.
-  Regenerate the complete v5 four-mode outputs before using them.
+  The regenerated complete v5 four-mode artifacts are in
+  `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`.

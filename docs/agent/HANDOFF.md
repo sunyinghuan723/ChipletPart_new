@@ -31,20 +31,20 @@ the repaired binary was rerun through
 `2d_power_map` backend for compatibility with prior reruns, not as
 `package_thermal` signoff.
 
-The clean v5 output below is superseded pending regeneration after the
-floorplan-constrained Hom-Cost correction. It reported Hom-Cost base `83.387100`,
-`T_max=305.581329 K`, and `T_avg=302.149750 K`; Hom-Therm reports base
-`82.660800`, `T_max=305.534332 K`, and `T_avg=301.782715 K`. Het-Cost
-reports base `71.289400`, `T_max=305.287170 K`, and `T_avg=301.108185 K`;
-Het-Therm reports base `76.877000`, `T_max=305.293365 K`, and
-`T_avg=301.662537 K`. All four selected thermal records were checked against
+The clean v5 output is current after the floorplan-constrained Hom-Cost
+correction. Hom-Cost and Hom-Therm both report base `82.660800`,
+`T_max=305.534332 K`, and `T_avg=301.782715 K`, selecting the same
+four-part all-7nm final solution. Het-Cost reports base `71.312300`,
+`T_max=306.098022 K`, and `T_avg=301.905975 K`; Het-Therm reports base
+`75.047000`, `T_max=305.316711 K`, and `T_avg=301.643890 K`. All four
+selected thermal records were checked against
 their saved final partition and technology assignment files. Current
 artifacts are `experiment_v5_epyc7282/analysis/summary.csv`, `analysis.md`,
 and `analysis/figures/epyc7282_partition_temperature_comparison.png` (plus
-PDF). For this seed, homogeneous thermal-aware search appeared to improve peak
-temperature and comparable objective; heterogeneous thermal-aware search did
-not improve either metric over its post-evaluated cost-only result. Do not use
-that summary or figure as a current comparison.
+PDF). For this seed, homogeneous thermal-aware search does not change the
+selected solution or comparable objective. Heterogeneous thermal-aware search
+reduces peak temperature by `0.781311 K` but increases comparable objective by
+`2.842854`.
 
 The final repair on 2026-05-25 found why the four-part `79.741852` result
 could not be thermally evaluated: ordinary homogeneous search ranked the
@@ -74,16 +74,14 @@ floorplanning as a move-feasibility constraint while keeping thermal out of
 its ranking. Temporary EPYC seed-`42` runs confirm that no-thermal,
 post-eval-only, and Hom-Therm all select the same valid four-part solution at
 base cost `82.660767`; its thermal metrics are `T_max=305.534332 K` and
-`T_avg=301.782715 K`. The complete v5 output must be regenerated after this
-change.
+`T_avg=301.782715 K`. The complete v5 output has now been regenerated after
+this change.
 
 Under the now-superseded ADR-0022 endpoint-only validation step, EPYC seed
 `42` no-thermal and post-eval-only flows selected the same valid three-part
 candidate at base cost `83.387138`. Post-evaluation
-reports `T_max=305.581329 K` and `T_avg=302.149750 K`; its saved validation
-artifact is
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only`
-in the clean four-mode rerun.
+reported `T_max=305.581329 K` and `T_avg=302.149750 K`. Its temporary output
+was removed when the final floorplan-constrained four-mode rerun replaced it.
 
 The intermediate correction on 2026-05-25 established that
 `--thermal-post-eval-only` must not change the homogeneous cost-only ranking.
@@ -623,10 +621,10 @@ bash /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis/commands.s
 
 Result: passed. It produced four final solutions with comparable thermal data:
 cost-only runs each contain one final post-evaluation; thermal-aware
-homogeneous and heterogeneous runs contain `307` and `3462` thermal records,
+homogeneous and heterogeneous runs contain `307` and `2816` thermal records,
 respectively. The generated report records the soft-budget outcome (`4/4`
-selected candidates remain above `300 K`) and runtime overhead (`5.81x`
-homogeneous and `8.06x` heterogeneous). Each selected thermal record matches
+selected candidates remain above `300 K`) and runtime overhead (`3.41x`
+homogeneous and `7.03x` heterogeneous). Each selected thermal record matches
 its saved final partition and technology assignment; log scanning found no
 inference failure or fallback.
 
