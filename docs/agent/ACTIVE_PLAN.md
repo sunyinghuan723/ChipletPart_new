@@ -40,14 +40,24 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The corrected EPYC v5 four-mode rerun is complete and verified under
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. Hom-Cost now
-performs floorplan-constrained cost refinement and no longer reports a base
-cost above Hom-Therm for this case. The experiment uses the legacy
-`2d_power_map` compatibility backend, not `package_thermal` signoff.
+The requested additional v5 four-mode reruns are complete and verified under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_48_1_14_4_1600_1600`,
+`experiment_v5_48_2_14_4_1600_1600`, `experiment_v5_ga100`, and
+`experiment_v5_mempool_group`. They use the corrected Hom-Cost flow, seed
+`42`, budget `300 K`, `lambda_peak=0.1`, and the legacy `2d_power_map`
+compatibility backend. `main.tex` was intentionally not changed.
 
 ## Completed Small Tasks
 
+- Completed four additional corrected v5 benchmark reruns on 2026-05-27.
+  All sixteen Hom-Cost/Hom-Therm/Het-Cost/Het-Therm modes completed with
+  final selected thermal records and PNG/PDF comparisons. Thermal-aware minus
+  cost-only `T_max` changes are `-1.646912/-0.982574 K` for
+  `48_1_14_4_1600_1600` (Hom/Het), `+0.029266/+0.074188 K` for
+  `48_2_14_4_1600_1600`, `-0.056732/-1.020447 K` for `ga100`, and
+  `+0.000000/+0.100067 K` for `mempool_group`. The WS2 memory guard from v4
+  was retained; its largest mode, Het-Therm, completed at `159822960 KB`
+  maximum RSS without allocation failure or inference fallback.
 - Fixed the EPYC Hom-Cost baseline ordering inconsistency on 2026-05-26.
   Under endpoint-only final validation, Hom-Cost reported a legal
   three-part `83.387138` solution while Hom-Therm found a legal four-part
@@ -236,6 +246,26 @@ labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
 as compatibility results.
 
 ## Recent Validation
+
+Additional corrected v5 benchmark rerun validation on 2026-05-27:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_48_1_14_4_1600_1600/analysis/commands.sh
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_ga100/analysis/commands.sh
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_mempool_group/analysis/commands.sh
+bash /home/yhsun/Chiplet-Partitioning/experiment_v5_48_2_14_4_1600_1600/analysis/commands.sh
+```
+
+Result: all sixteen summary rows report `completed`; all selected thermal
+result JSON files, field NPZ files, final solution artifacts, and comparison
+figures exist. A structured consistency check matched final partitions to
+selected instances directly for the two waferscale cases and validated the
+established hierarchical expansions for `mempool_group` (`36 -> 40`) and
+`ga100` (`45 -> 179`), along with final technology assignments. WS2 completed
+under the retained one-worker/one-thread allocator guard with driver maximum
+RSS `159822960 KB`; no OOM or thermal-service fallback was found. Intermediate
+GA candidate-size diagnostics were present in `48_1_14_4_1600_1600` and
+`mempool_group`, but both runs saved valid final solutions.
 
 Homogeneous floorplan-constrained baseline validation on 2026-05-26:
 

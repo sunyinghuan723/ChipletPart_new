@@ -21,15 +21,48 @@ revalidation.
 
 ## Current Task
 
-On 2026-05-26, the user requested a clean rerun of the fixed
-Hom-Cost/Hom-Therm/Het-Cost/Het-Therm EPYC experiment. Previous contents of
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282` were removed, and
-the repaired binary was rerun through
-`experiment_v5_epyc7282/analysis/commands.sh` with seed `42`,
-`T_budget=300 K`, `lambda_peak=0.1`, and heterogeneous technologies
+On 2026-05-27, the user requested corrected v5 four-mode results for the
+remaining benchmark cases. These were run sequentially through
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_tools/run_case.sh` with
+per-output `analysis/commands.sh` entrypoints, seed `42`, `T_budget=300 K`,
+`lambda_peak=0.1`, 50 generations, population 50, and technologies
 `7nm,10nm,45nm`. This protocol intentionally fixes the legacy
-`2d_power_map` backend for compatibility with prior reruns, not as
-`package_thermal` signoff.
+`2d_power_map` backend for compatibility with the existing v5 EPYC rerun, not
+as `package_thermal` signoff. `main.tex` was not edited.
+
+Completed v5 output directories:
+
+- `/home/yhsun/Chiplet-Partitioning/experiment_v5_48_1_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v5_48_2_14_4_1600_1600`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v5_ga100`
+- `/home/yhsun/Chiplet-Partitioning/experiment_v5_mempool_group`
+
+Final thermal-aware minus cost-only `T_max` changes from these seed-`42`
+runs are:
+
+| Benchmark | Homogeneous delta (K) | Heterogeneous delta (K) |
+| --- | ---: | ---: |
+| `48_1_14_4_1600_1600` | `-1.646912` | `-0.982574` |
+| `48_2_14_4_1600_1600` | `+0.029266` | `+0.074188` |
+| `ga100` | `-0.056732` | `-1.020447` |
+| `mempool_group` | `+0.000000` | `+0.100067` |
+
+Each output contains a four-row `analysis/summary.csv`, `analysis.md`,
+PNG/PDF comparison figures, final partitions, and selected thermal
+JSON/NPZ fields. A structured check validated all sixteen selected records.
+`ga100` and `mempool_group` use the existing detailed-block thermal expansion
+(`45 -> 179` and `36 -> 40`, respectively), while the waferscale selected
+instance partitions directly match their saved final partitions. WS2 ran
+alone with the established worker/thread/allocator guard; Het-Therm was its
+largest stage at `159822960 KB` maximum RSS and completed without allocation
+failure or inference fallback. `48_1_14_4_1600_1600` and `mempool_group`
+logged non-winning intermediate GA candidate-size diagnostics, while all
+final reported solutions were valid.
+
+The earlier corrected EPYC v5 rerun remains current under
+`/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282`. It was run on
+2026-05-26 through `experiment_v5_epyc7282/analysis/commands.sh` with the
+same seed, budget, lambda, technology set, and legacy compatibility backend.
 
 The clean v5 output is current after the floorplan-constrained Hom-Cost
 correction. Hom-Cost and Hom-Therm both report base `82.660800`,
