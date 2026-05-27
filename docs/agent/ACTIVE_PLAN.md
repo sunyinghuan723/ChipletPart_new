@@ -40,15 +40,29 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The requested EPYC v6 final-selection-incumbent experiment is complete under
-`/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282`. It uses seed
-`42`, budget `300 K`, `lambda_peak=0.1`, and the legacy `2d_power_map`
-compatibility backend. Both thermal final outputs retained their corresponding
-Cost incumbents, satisfying the requested no-worse-final-`J` protocol for
-this run. `main.tex` was intentionally not changed.
+The requested GA100 v6 follow-up is complete under
+`/home/yhsun/Chiplet-Partitioning/experiment_v6_ga100`. It uses seed `42`,
+budget `300 K`, `lambda_peak=0.1`, the legacy `2d_power_map` compatibility
+backend, and input data from `ChipletPart/test_data/ga100`. Both thermal
+final outputs retain searched improvements while satisfying the new
+no-worse-final-`J` protocol against admitted Cost candidates. `main.tex` was
+intentionally not changed.
 
 ## Completed Small Tasks
 
+- Completed GA100 experiment v6 on 2026-05-27 under the incumbent protocol.
+  Hom-Cost reports comparable objective `38.180714` and
+  `T_max=307.387634 K`; Hom-Therm retains its searched winner at objective
+  `38.068913` and `T_max=307.330902 K`. Het-Cost reports comparable
+  objective `36.633680` and `T_max=306.968414 K`; Het-Therm retains its
+  searched winner at objective `36.354332` and `T_max=306.186462 K`, after
+  logging fixed incumbent objective `37.380592`. Thus same-run thermal minus
+  cost deltas are `-0.111801` (Hom) and `-0.279348` (Het). The run wrote
+  `4211` thermal result JSON records plus summary/report/PNG/PDF artifacts and
+  `analysis/comparison_with_v5.md`. Relative to v5, homogeneous output is
+  identical; heterogeneous v6 results are higher by `+0.041472` (Cost) and
+  `+0.388594` (Therm) in objective, consistent with heuristic/parallel GA
+  trajectory variation rather than a final-selection regression.
 - Completed EPYC experiment v6 on 2026-05-27 under the new incumbent
   protocol. Hom-Cost/Hom-Therm both select the four-part all-7nm candidate
   with comparable objective `85.723683` and `T_max=305.534332 K`.
@@ -269,6 +283,21 @@ labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
 as compatibility results.
 
 ## Recent Validation
+
+GA100 final-selection-incumbent v6 experiment validation on 2026-05-27:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v6_ga100/analysis/commands.sh
+```
+
+Result: passed. All four summary rows completed and produced `4211` thermal
+result JSON records plus PNG/PDF comparison figures. Hom-Therm and Het-Therm
+select `temperature_source=in_search`, with comparable objectives
+`38.068913 <= 38.180714` and `36.354332 <= 36.633680`, respectively. The
+heterogeneous thermal log records fixed incumbent objective `37.380592`,
+searched winner objective `36.354294`, and retention of the searched winner.
+No error, exception, failed, or inference-fallback marker was found in the
+four run logs.
 
 EPYC final-selection-incumbent v6 experiment validation on 2026-05-27:
 

@@ -21,6 +21,26 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-27, the user requested a GA100 follow-up using the v6 incumbent
+selection protocol and `ChipletPart/test_data/ga100`. The completed output is
+under `/home/yhsun/Chiplet-Partitioning/experiment_v6_ga100`, using seed
+`42`, budget `300 K`, `lambda_peak=0.1`, and the legacy `2d_power_map`
+compatibility backend. Hom-Cost/Hom-Therm report comparable objectives
+`38.180714`/`38.068913` with `T_max=307.387634`/`307.330902 K`;
+Het-Cost/Het-Therm report `36.633680`/`36.354332` with
+`T_max=306.968414`/`306.186462 K`. Both thermal final results retained their
+searched winners and are strictly below their same-run cost reports. The
+heterogeneous thermal run additionally logs its admitted fixed incumbent at
+objective `37.380592` and searched winner at `36.354294`, confirming final
+selection chose the lower exact thermal-run candidate. The four modes wrote
+`4211` thermal result JSON records; logs contain no error, failure, or
+inference-fallback marker. Artifacts include `analysis/summary.csv`,
+`analysis/analysis.md`, `analysis/comparison_with_v5.md`, and PNG/PDF
+figures. Across versions the homogeneous results reproduce v5 exactly, while
+v6 heterogeneous objectives are higher than v5 due to a changed
+heuristic/parallel GA trajectory; the no-worse guarantee is established by
+the within-v6 candidate comparison. `main.tex` was not modified.
+
 On 2026-05-27, the user requested a protocol correction so thermal-aware
 search may claim no worse final `J` than the matching Cost baseline. The
 implementation now accepts `--thermal-incumbent-partition` and
