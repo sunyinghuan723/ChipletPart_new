@@ -40,16 +40,27 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-Run the requested EPYC v6 experiment under
-`/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282` after adding the
-final-selection incumbent protocol. Thermal runs now accept the matching
-Cost winner as a fixed final candidate and select the exact final objective
-over the union. The rerun uses seed `42`, budget `300 K`,
-`lambda_peak=0.1`, and the legacy `2d_power_map` compatibility backend.
-`main.tex` must remain unchanged for this task.
+The requested EPYC v6 final-selection-incumbent experiment is complete under
+`/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282`. It uses seed
+`42`, budget `300 K`, `lambda_peak=0.1`, and the legacy `2d_power_map`
+compatibility backend. Both thermal final outputs retained their corresponding
+Cost incumbents, satisfying the requested no-worse-final-`J` protocol for
+this run. `main.tex` was intentionally not changed.
 
 ## Completed Small Tasks
 
+- Completed EPYC experiment v6 on 2026-05-27 under the new incumbent
+  protocol. Hom-Cost/Hom-Therm both select the four-part all-7nm candidate
+  with comparable objective `85.723683` and `T_max=305.534332 K`.
+  Het-Cost selects a six-part mixed-node candidate with comparable objective
+  `73.971741` and `T_max=305.695648 K`; Het-Therm's searched winner ended at
+  objective `79.808777`, then final selection correctly retained the fixed
+  cost incumbent at objective `73.971710` in the log (`73.971741` from the
+  rounded CSV fields). Artifacts include `analysis/summary.csv`,
+  `analysis/analysis.md`, `analysis/comparison_with_v5.md`, and comparison
+  PNG/PDF figures. Relative to v5 selected Het-Therm, v6 reduces comparable
+  objective by `3.902001` but is `0.378937 K` hotter because it now honors
+  the objective rather than retaining a cooler, dominated solution.
 - Implemented thermal final-selection incumbent retention on 2026-05-27.
   New `--thermal-incumbent-partition` and optional
   `--thermal-incumbent-techs` inputs allow a Cost winner to be evaluated as
@@ -258,6 +269,20 @@ labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
 as compatibility results.
 
 ## Recent Validation
+
+EPYC final-selection-incumbent v6 experiment validation on 2026-05-27:
+
+```bash
+bash /home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282/analysis/commands.sh
+```
+
+Result: passed. The run produced four completed summary rows, four saved
+final solutions, `2930` thermal result JSON records in total, and PNG/PDF
+comparison figures. Selected instances for Hom-Therm and Het-Therm carry
+`search_stage=cost_incumbent_final_candidate`. No error, exception, failed,
+or inference-fallback marker was found in the four run logs. Het-Therm
+logged searched objective `79.808777`, fixed incumbent objective
+`73.971710`, and selection of the fixed incumbent as the final winner.
 
 Thermal incumbent protocol implementation validation on 2026-05-27:
 

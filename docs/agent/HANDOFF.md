@@ -31,9 +31,15 @@ homogeneous search inserts the candidate in its final sorted result set;
 heterogeneous GA evaluates it after search without running FM/KL refinement
 on the Cost winner. The new EPYC experiment entrypoint is
 `/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282/analysis/commands.sh`.
-Build, CTest, and homogeneous/heterogeneous mock incumbent smokes passed; the
-full real v6 rerun is the active next operation. `main.tex` has not been
-modified and is excluded from this task.
+Build, CTest, and homogeneous/heterogeneous mock incumbent smokes passed. The
+full real v6 rerun also completed: Hom-Cost and Hom-Therm select objective
+`85.723683` with `T_max=305.534332 K`; Het-Cost and final Het-Therm select
+objective `73.971741` with `T_max=305.695648 K`. The Het-Therm search alone
+ended at objective `79.808777`, after which final selection chose the
+admitted incumbent (`73.971710` as logged before report rounding). Results
+are in `analysis/summary.csv`, `analysis/analysis.md`,
+`analysis/comparison_with_v5.md`, and the PNG/PDF figures. `main.tex` has
+not been modified and is excluded from this task.
 
 On 2026-05-27, the user requested corrected v5 four-mode results for the
 remaining benchmark cases. These were run sequentially through

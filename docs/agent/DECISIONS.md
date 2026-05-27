@@ -502,5 +502,8 @@ methodology, or experiment-policy decision is made.
   objective. The cost-only behavior without thermal remains unchanged.
 - Validation / follow-up: Build and both CTest tests passed. Mock incumbent
   smokes selected the admitted candidate in both standard and short genetic
-  flows. Run and analyze `experiment_v6_epyc7282` with real compatibility
-  thermal inference.
+  flows. The completed real compatibility rerun at
+  `experiment_v6_epyc7282` selects the incumbent for both thermal modes; in
+  particular, Het-Therm replaces searched objective `79.808777` with the
+  admitted final objective `73.971710`, establishing the intended
+  no-regression behavior for this run.
