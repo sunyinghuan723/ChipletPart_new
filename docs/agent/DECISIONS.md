@@ -477,3 +477,30 @@ methodology, or experiment-policy decision is made.
   partition, geometry, and base cost with penalized objective `85.723648`.
   The regenerated complete v5 four-mode artifacts are in
   `/home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/analysis`.
+
+## ADR-0024: Admit The Cost Winner To Thermal Final Selection
+
+- Date: 2026-05-27
+- Decision: A thermal-aware run may accept the matching Cost winner as a fixed
+  final candidate through `--thermal-incumbent-partition` and, for
+  heterogeneous search, `--thermal-incumbent-techs`. The admitted candidate
+  is evaluated under the Thermal run's final floorplan and surrogate
+  configuration, and final output is selected by exact final `J` over the
+  admitted Cost candidate and thermally searched candidates.
+- Status: Accepted
+- Context: In EPYC experiment v5, `Het-Cost` post-evaluated to comparable
+  objective `75.030888`, while `Het-Therm` selected a cooler but worse
+  objective `77.873742`. Thermal search alone does not guarantee that a
+  heuristic trajectory retains an already known baseline solution.
+- Implementation policy: Keep the Cost partition and technology assignment
+  fixed during incumbent evaluation; generate a final matching floorplan and
+  invoke the same thermal backend/configuration as the thermal run. Standard
+  homogeneous search appends it to final candidates. Heterogeneous GA
+  compares it after search and does not run refinement on it.
+- Consequences: For an admitted, evaluable Cost candidate, the reported
+  Thermal final objective cannot exceed that candidate's final-condition
+  objective. The cost-only behavior without thermal remains unchanged.
+- Validation / follow-up: Build and both CTest tests passed. Mock incumbent
+  smokes selected the admitted candidate in both standard and short genetic
+  flows. Run and analyze `experiment_v6_epyc7282` with real compatibility
+  thermal inference.

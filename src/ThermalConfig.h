@@ -26,6 +26,8 @@ struct ThermalConfig {
   std::string thermal_inference_script;
   std::string python_executable = "python3";
   std::string thermal_device = "auto";
+  std::string thermal_incumbent_partition;
+  std::string thermal_incumbent_techs;
 
   double thermal_budget = 358.15; // Kelvin
   double lambda_peak = 0.0;

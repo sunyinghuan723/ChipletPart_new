@@ -73,6 +73,61 @@ namespace chiplet {
 // METIS header is now included through ChipletPart.h
 #endif
 
+namespace {
+
+bool LoadPartitionCandidate(const std::string& path,
+                            size_t expected_vertices,
+                            std::vector<int>& partition) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    Console::Error("[THERMAL] Cannot open incumbent partition: " + path);
+    return false;
+  }
+  partition.clear();
+  int part_id = -1;
+  while (input >> part_id) {
+    if (part_id < 0) {
+      Console::Error("[THERMAL] Incumbent partition has a negative part ID");
+      return false;
+    }
+    partition.push_back(part_id);
+  }
+  if (partition.size() != expected_vertices) {
+    Console::Error("[THERMAL] Incumbent partition size " +
+                   std::to_string(partition.size()) +
+                   " does not match vertex count " +
+                   std::to_string(expected_vertices));
+    return false;
+  }
+  return true;
+}
+
+bool LoadTechnologyCandidate(const std::string& path,
+                             int expected_parts,
+                             std::vector<std::string>& tech_nodes) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    Console::Error("[THERMAL] Cannot open incumbent technology assignment: " +
+                   path);
+    return false;
+  }
+  tech_nodes.clear();
+  std::string technology;
+  while (input >> technology) {
+    tech_nodes.push_back(technology);
+  }
+  if (static_cast<int>(tech_nodes.size()) != expected_parts) {
+    Console::Error("[THERMAL] Incumbent technology count " +
+                   std::to_string(tech_nodes.size()) +
+                   " does not match partition count " +
+                   std::to_string(expected_parts));
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 void ChipletPart::SetFixedPartitionCount(int count) {
   if (count <= 0) {
     throw std::invalid_argument("fixed partition count must be positive");
@@ -1298,6 +1353,47 @@ void ChipletPart::GeneticTechPart(
       reach,
       separation
   );
+
+  if (thermal_config_.enable_thermal &&
+      !thermal_config_.thermal_post_eval_only &&
+      !thermal_config_.thermal_incumbent_partition.empty()) {
+    std::vector<int> incumbent_partition;
+    if (!LoadPartitionCandidate(thermal_config_.thermal_incumbent_partition,
+                                hypergraph_->GetNumVertices(),
+                                incumbent_partition)) {
+      throw std::runtime_error(
+          "[THERMAL] Failed to load fixed cost incumbent partition");
+    }
+    if (thermal_config_.thermal_incumbent_techs.empty()) {
+      throw std::runtime_error(
+          "[THERMAL] A heterogeneous fixed incumbent requires a technology file");
+    }
+    const int incumbent_parts =
+        *std::max_element(incumbent_partition.begin(), incumbent_partition.end()) + 1;
+    std::vector<std::string> incumbent_tech_nodes;
+    if (!LoadTechnologyCandidate(thermal_config_.thermal_incumbent_techs,
+                                 incumbent_parts, incumbent_tech_nodes)) {
+      throw std::runtime_error(
+          "[THERMAL] Failed to load fixed cost incumbent technologies");
+    }
+    GeneticSolution incumbent = partitioner.EvaluateFixedFinalCandidate(
+        incumbent_partition, incumbent_tech_nodes, chiplet_io_file,
+        chiplet_netlist_file, chiplet_blocks_file);
+    if (!incumbent.valid) {
+      throw std::runtime_error(
+          "[THERMAL] Fixed cost incumbent could not be evaluated at final conditions");
+    }
+    Console::Info("[THERMAL] Searched winner objective before incumbent selection: " +
+                  std::to_string(solution.cost));
+    if (!solution.valid || incumbent.cost < solution.cost) {
+      solution = incumbent;
+      Console::Info(
+          "[THERMAL] Selected fixed cost incumbent as final thermal winner");
+    } else {
+      Console::Info(
+          "[THERMAL] Retained thermally searched winner over fixed cost incumbent");
+    }
+  }
   
   auto end_time = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count();
@@ -2410,6 +2506,74 @@ void ChipletPart::Partition(
   #else
   }
   #endif
+
+  if (thermal_search_enabled &&
+      !thermal_config_.thermal_incumbent_partition.empty()) {
+    std::vector<int> incumbent_partition;
+    if (!LoadPartitionCandidate(thermal_config_.thermal_incumbent_partition,
+                                hypergraph_->GetNumVertices(),
+                                incumbent_partition)) {
+      throw std::runtime_error(
+          "[THERMAL] Failed to load fixed cost incumbent partition");
+    }
+    const int incumbent_num_parts =
+        *std::max_element(incumbent_partition.begin(), incumbent_partition.end()) + 1;
+    auto incumbent_refiner = std::make_shared<chiplet::ChipletRefiner>(
+        incumbent_num_parts, refine_iters_, max_moves_,
+        std::vector<int>(hypergraph_->GetNumHyperedges(), 2), floorplanning,
+        chiplet_io_file, chiplet_layer_file, chiplet_wafer_process_file,
+        chiplet_assembly_process_file, chiplet_test_file, chiplet_netlist_file,
+        chiplet_blocks_file);
+    std::vector<std::string> incumbent_tech(incumbent_num_parts, tech);
+    incumbent_refiner->SetNumParts(incumbent_num_parts);
+    incumbent_refiner->SetTechArray(incumbent_tech);
+    incumbent_refiner->SetRetainBestFeasibleFloorplan(true);
+    auto incumbent_floor_result = incumbent_refiner->RunFloorplanner(
+        incumbent_partition, hypergraph_, 200, 50, 0.00001);
+    incumbent_refiner->SetRetainBestFeasibleFloorplan(false);
+    const bool incumbent_success = std::get<3>(incumbent_floor_result);
+    if (!incumbent_success) {
+      throw std::runtime_error(
+          "[THERMAL] Fixed cost incumbent has no feasible final floorplan");
+    }
+    const std::vector<float> incumbent_aspect_ratios =
+        std::get<0>(incumbent_floor_result);
+    const std::vector<float> incumbent_x_locations =
+        std::get<1>(incumbent_floor_result);
+    const std::vector<float> incumbent_y_locations =
+        std::get<2>(incumbent_floor_result);
+    incumbent_refiner->SetAspectRatios(incumbent_aspect_ratios);
+    incumbent_refiner->SetXLocations(incumbent_x_locations);
+    incumbent_refiner->SetYLocations(incumbent_y_locations);
+    const float incumbent_base_cost =
+        incumbent_refiner->GetCostFromScratch(incumbent_partition);
+    ThermalConfig incumbent_config = thermal_config_;
+    incumbent_config.thermal_search_stage = "cost_incumbent_final_candidate";
+    ThermalAwareEvaluator incumbent_evaluator(
+        incumbent_config, chiplet_io_file, chiplet_netlist_file,
+        chiplet_blocks_file);
+    const auto incumbent_thermal = incumbent_evaluator.Evaluate(
+        incumbent_base_cost, incumbent_partition, incumbent_tech,
+        incumbent_aspect_ratios, incumbent_x_locations, incumbent_y_locations,
+        true);
+    PartitionResult incumbent_result;
+    incumbent_result.partition_idx = -1;
+    incumbent_result.num_parts = incumbent_num_parts;
+    incumbent_result.cost = static_cast<float>(incumbent_thermal.objective);
+    incumbent_result.base_cost = incumbent_base_cost;
+    incumbent_result.thermal_t_max = incumbent_thermal.thermal.t_max;
+    incumbent_result.thermal_t_avg = incumbent_thermal.thermal.t_avg;
+    incumbent_result.thermal_penalty =
+        incumbent_thermal.peak_penalty + incumbent_thermal.avg_penalty;
+    incumbent_result.partition = incumbent_partition;
+    incumbent_result.aspect_ratios = incumbent_aspect_ratios;
+    incumbent_result.x_locations = incumbent_x_locations;
+    incumbent_result.y_locations = incumbent_y_locations;
+    incumbent_result.valid = true;
+    partition_results.push_back(incumbent_result);
+    Console::Info("[THERMAL] Added fixed cost incumbent final candidate with objective " +
+                  std::to_string(incumbent_result.cost));
+  }
   
   auto end_parallel_time = std::chrono::high_resolution_clock::now();
   auto elapsed_parallel_time = std::chrono::duration_cast<std::chrono::seconds>(

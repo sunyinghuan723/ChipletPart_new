@@ -40,15 +40,27 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The requested additional v5 four-mode reruns are complete and verified under
-`/home/yhsun/Chiplet-Partitioning/experiment_v5_48_1_14_4_1600_1600`,
-`experiment_v5_48_2_14_4_1600_1600`, `experiment_v5_ga100`, and
-`experiment_v5_mempool_group`. They use the corrected Hom-Cost flow, seed
-`42`, budget `300 K`, `lambda_peak=0.1`, and the legacy `2d_power_map`
-compatibility backend. `main.tex` was intentionally not changed.
+Run the requested EPYC v6 experiment under
+`/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282` after adding the
+final-selection incumbent protocol. Thermal runs now accept the matching
+Cost winner as a fixed final candidate and select the exact final objective
+over the union. The rerun uses seed `42`, budget `300 K`,
+`lambda_peak=0.1`, and the legacy `2d_power_map` compatibility backend.
+`main.tex` must remain unchanged for this task.
 
 ## Completed Small Tasks
 
+- Implemented thermal final-selection incumbent retention on 2026-05-27.
+  New `--thermal-incumbent-partition` and optional
+  `--thermal-incumbent-techs` inputs allow a Cost winner to be evaluated as
+  a fixed final candidate under the Thermal run's final floorplan and
+  surrogate configuration. Standard homogeneous search appends that exact
+  endpoint to its final result set; heterogeneous genetic search evaluates
+  it after the GA without refining it and replaces the searched winner only
+  when its final `J` is lower. This supplies the requested guarantee that a
+  Thermal final result cannot be worse than its admitted Cost candidate on
+  the final thermal objective. The v6 EPYC command entrypoint is
+  `/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282/analysis/commands.sh`.
 - Completed four additional corrected v5 benchmark reruns on 2026-05-27.
   All sixteen Hom-Cost/Hom-Therm/Het-Cost/Het-Therm modes completed with
   final selected thermal records and PNG/PDF comparisons. Thermal-aware minus
@@ -246,6 +258,31 @@ labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
 as compatibility results.
 
 ## Recent Validation
+
+Thermal incumbent protocol implementation validation on 2026-05-27:
+
+```bash
+bash -n run_chiplet_test.sh
+cmake --build build --target chipletPart thermal_mvp_test floorplan_retention_test thermal_collect_cli -j 4
+ctest --test-dir build --output-on-failure
+./run_chiplet_test.sh epyc7282 --seed 42 --thermal-mock \
+  --thermal-budget 300 --thermal-lambda-peak 0.1 \
+  --thermal-output-dir /tmp/chipletpart_v6_hom_incumbent_mock \
+  --thermal-incumbent-partition /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/homogeneous_cost_only/final_partition.parts
+./run_chiplet_test.sh epyc7282 --genetic --tech-nodes 7nm,10nm,45nm \
+  --generations 1 --population 4 --seed 42 --thermal-mock \
+  --thermal-budget 300 --thermal-lambda-peak 0.1 \
+  --thermal-output-dir /tmp/chipletpart_v6_het_incumbent_mock \
+  --thermal-incumbent-partition /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/heterogeneous_cost_only/final_partition.parts \
+  --thermal-incumbent-techs /home/yhsun/Chiplet-Partitioning/experiment_v5_epyc7282/heterogeneous_cost_only/final_partition.techs
+```
+
+Result: passed. Both CTest tests passed; the existing Eigen deprecation
+warning remains. The homogeneous mock run logged and selected its added
+fixed incumbent at objective `82.660767`. The short heterogeneous mock run
+selected its fixed incumbent at `71.312340` over a searched objective of
+`109.146767`. `nvidia-smi` and the DeepOHeat PyTorch environment also report
+two available NVIDIA GeForce RTX 4090 devices before the real rerun.
 
 Additional corrected v5 benchmark rerun validation on 2026-05-27:
 

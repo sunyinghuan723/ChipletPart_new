@@ -21,6 +21,20 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-27, the user requested a protocol correction so thermal-aware
+search may claim no worse final `J` than the matching Cost baseline. The
+implementation now accepts `--thermal-incumbent-partition` and
+`--thermal-incumbent-techs`: the saved Cost winner is kept fixed, newly
+floorplanned and thermally evaluated using the Thermal run's final settings,
+then included in final selection alongside thermal-searched winners. Standard
+homogeneous search inserts the candidate in its final sorted result set;
+heterogeneous GA evaluates it after search without running FM/KL refinement
+on the Cost winner. The new EPYC experiment entrypoint is
+`/home/yhsun/Chiplet-Partitioning/experiment_v6_epyc7282/analysis/commands.sh`.
+Build, CTest, and homogeneous/heterogeneous mock incumbent smokes passed; the
+full real v6 rerun is the active next operation. `main.tex` has not been
+modified and is excluded from this task.
+
 On 2026-05-27, the user requested corrected v5 four-mode results for the
 remaining benchmark cases. These were run sequentially through
 `/home/yhsun/Chiplet-Partitioning/experiment_v5_tools/run_case.sh` with
