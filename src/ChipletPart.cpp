@@ -2328,7 +2328,8 @@ void ChipletPart::Partition(
         if (floorplanning) {
           thread_refiner->SetRetainBestFeasibleFloorplan(true);
           auto final_floor_result = thread_refiner->RunFloorplanner(
-              partition_copy, hypergraph_, 200, 50, 0.00001);
+              partition_copy, hypergraph_, 200, 50, 0.00001, false,
+              thermal_search_enabled);
           thread_refiner->SetRetainBestFeasibleFloorplan(false);
           result_aspect_ratios = std::get<0>(final_floor_result);
           result_x_locations = std::get<1>(final_floor_result);

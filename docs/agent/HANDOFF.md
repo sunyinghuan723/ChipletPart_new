@@ -21,6 +21,40 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-29, the user asked to fix the WS1 Hom-Therm negative thermal result
+by making final floorplan selection thermal-aware, or at least thermal
+re-ranking feasible floorplans for the same partition before saving geometry.
+The root cause was that `RunFloorplanner` picked the simulated-annealing
+worker with the lowest floorplanner cost, not the lowest final thermal
+objective, so the saved WS1 Hom-Therm geometry was hotter than another
+feasible floorplan for the same selected partition. The repair adds an opt-in
+`thermal_rerank_floorplans` flag to `RunFloorplanner`/`Floorplanner`; final
+homogeneous and heterogeneous thermal-aware calls enable it and select among
+valid SA worker geometries by
+`C_sys + lambda_peak * max(0, T_max - T_budget)^2 + lambda_avg * T_avg`.
+Cost-only and intermediate refinement floorplanning remain unchanged.
+
+Build validation passed with:
+
+```sh
+cmake --build build --target chipletPart thermal_mvp_test thermal_collect_cli -j 4
+ctest -R thermal_mvp_test --output-on-failure
+```
+
+The WS1 Hom-Therm rerun used seed `42`, `T_budget=300 K`, `lambda_peak=0.01`,
+and the legacy `2d_power_map` backend under
+`/home/yhsun/Chiplet-Partitioning/experiment_v6_48_1_14_4_1600_1600`. The old
+`homogeneous_thermal` directory was preserved as
+`homogeneous_thermal_before_floorplan_rerank`; the corrected output is now the
+current `homogeneous_thermal`. Corrected Hom-Therm reports base cost
+`54.149265`, `T_max=332.955811 K`, `T_avg=309.553650 K`, thermal penalty
+`10.860854`, comparable objective `65.010154`, `7` all-7nm parts, runtime
+`174.45 s`, and `604` thermal records. It now improves over Hom-Cost
+(`T_max=347.938110 K`, comparable objective `73.435924`). The selected thermal
+record was checked against the saved `final_partition.parts`, and
+`main.tex`/`main.pdf` plus the WS1 analysis CSV, markdown, and figures were
+regenerated with the corrected values.
+
 On 2026-05-28, after user testing found the incumbent-final-selection scheme
 ineffective, the code was reverted to the pre-`87717d9` behavior. ChipletPart
 no longer exposes `--thermal-incumbent-partition` or

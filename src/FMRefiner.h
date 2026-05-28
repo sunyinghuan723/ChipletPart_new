@@ -43,7 +43,9 @@
 #include "evaluator_cpp.h" // Include the cost model evaluator
 #include "ThermalAwareEvaluator.h"
 #include <chrono>
+#include <cmath>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <set>
 namespace chiplet {
@@ -222,7 +224,8 @@ public:
   std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, bool>
   RunFloorplanner(std::vector<int> &partition, HGraphPtr hgraph, int max_steps,
                   int perturbations, float cooling_acceleration_factor,
-                  bool local = false) {
+                  bool local = false,
+                  bool thermal_rerank_floorplans = false) {
   
     // Always generate a fresh netlist from the current partition
     chiplet_graph_ = GenerateNetlist(hgraph, partition);
@@ -260,7 +263,8 @@ public:
     }
     
               
-    return Floorplanner(max_steps, perturbations, cooling_acceleration_factor, local);
+    return Floorplanner(max_steps, perturbations, cooling_acceleration_factor,
+                        local, &partition, thermal_rerank_floorplans);
   }
 
   Matrix<float> GetBlockBalance(const HGraphPtr hgraph,
@@ -440,7 +444,9 @@ public:
   void RunSASegment(std::shared_ptr<SACore> sa, float cooling_acceleration_factor, int steps);
   std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, bool>
   Floorplanner(int max_steps, int perturbations,
-               float cooling_acceleration_factor, bool local = false);
+               float cooling_acceleration_factor, bool local = false,
+               const std::vector<int>* thermal_partition = nullptr,
+               bool thermal_rerank_floorplans = false);
 
   // The main function
   void Refine(const HGraphPtr &hgraph, const Matrix<float> &upper_block_balance,

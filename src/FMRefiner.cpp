@@ -231,7 +231,9 @@ void ChipletRefiner::BuildChiplets(const HGraphPtr &hgraph) {
 // return a tuple of <vector,vector, bool>
 std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, bool>
 ChipletRefiner::Floorplanner(int max_steps, int perturbations,
-                             float cooling_acceleration_factor, bool local) {
+                             float cooling_acceleration_factor, bool local,
+                             const std::vector<int>* thermal_partition,
+                             bool thermal_rerank_floorplans) {
   // Start timing for performance tracking
   auto start_time = std::chrono::high_resolution_clock::now();
   
@@ -396,26 +398,75 @@ ChipletRefiner::Floorplanner(int max_steps, int perturbations,
     
     // Find best solution
     SACore* best_sa = nullptr;
-    float best_cost = std::numeric_limits<float>::max();
+    double best_cost = std::numeric_limits<double>::infinity();
     bool is_valid = false;
-    
-    for (auto& worker : workers) {
-      try {
-        float current_cost = worker->getCost();
-        bool current_valid = worker->isValid();
-        
-        // Always prefer valid solutions
-    if ((current_valid && !is_valid) || 
-        (current_valid == is_valid && current_cost < best_cost)) {
-          best_sa = worker.get();
-      best_cost = current_cost;
-      is_valid = current_valid;
-      
+
+    if (thermal_rerank_floorplans && ThermalEvaluationEnabled() &&
+        thermal_partition != nullptr) {
+      const std::vector<std::string> tech_assignment =
+          GetPartitionTechAssignment(*thermal_partition);
+      for (auto& worker : workers) {
+        try {
+          const bool current_valid = worker->isValid();
+          if (!current_valid) {
+            continue;
+          }
+          std::vector<Chiplet> candidate_chiplets;
+          worker->getMacros(candidate_chiplets);
+          std::vector<float> candidate_aspect_ratios;
+          std::vector<float> candidate_x_locations;
+          std::vector<float> candidate_y_locations;
+          candidate_aspect_ratios.reserve(candidate_chiplets.size());
+          candidate_x_locations.reserve(candidate_chiplets.size());
+          candidate_y_locations.reserve(candidate_chiplets.size());
+          for (const auto& chiplet : candidate_chiplets) {
+            candidate_aspect_ratios.push_back(
+                chiplet.getRealWidth() /
+                std::max(0.001f, chiplet.getRealHeight()));
+            candidate_x_locations.push_back(chiplet.getRealX());
+            candidate_y_locations.push_back(chiplet.getRealY());
+          }
+          const float base_cost = GetBaseCostWithFloorplan(
+              *thermal_partition, candidate_aspect_ratios,
+              candidate_x_locations, candidate_y_locations, false);
+          if (!std::isfinite(base_cost) ||
+              base_cost >= std::numeric_limits<float>::max() - 1.0f) {
+            continue;
+          }
+          auto thermal_eval = thermal_evaluator_->Evaluate(
+              base_cost, *thermal_partition, tech_assignment,
+              candidate_aspect_ratios, candidate_x_locations,
+              candidate_y_locations, true);
+          if (thermal_eval.objective < best_cost) {
+            best_sa = worker.get();
+            best_cost = thermal_eval.objective;
+            is_valid = true;
+          }
+        } catch (const std::exception& e) {
+          std::cerr << "[THERMAL] Warning: skipped final floorplan thermal "
+                    << "rerank candidate: " << e.what() << std::endl;
         }
-      } catch (const std::exception& e) {
-        std::cerr << "[ERROR] Exception evaluating worker " << worker->getWorkerId() 
-                  << ": " << e.what() << std::endl;
-        // Continue with other workers
+      }
+    }
+    
+    if (best_sa == nullptr) {
+      for (auto& worker : workers) {
+        try {
+          float current_cost = worker->getCost();
+          bool current_valid = worker->isValid();
+
+          // Always prefer valid solutions
+          if ((current_valid && !is_valid) ||
+              (current_valid == is_valid && current_cost < best_cost)) {
+            best_sa = worker.get();
+            best_cost = current_cost;
+            is_valid = current_valid;
+          }
+        } catch (const std::exception& e) {
+          std::cerr << "[ERROR] Exception evaluating worker " << worker->getWorkerId()
+                    << ": " << e.what() << std::endl;
+          // Continue with other workers
+        }
       }
     }
     

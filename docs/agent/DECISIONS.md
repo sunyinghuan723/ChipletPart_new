@@ -510,3 +510,42 @@ methodology, or experiment-policy decision is made.
   ineffective, so the code and CLI were restored to the pre-`87717d9`
   behavior. Keep the v6 experiments as diagnostics rather than current
   methodology evidence.
+
+## ADR-0025: Thermal-Rerank Final Floorplans In Thermal-Aware Runs
+
+- Date: 2026-05-29
+- Decision: When final floorplanning is run for a thermal-aware final
+  candidate, select the saved feasible geometry by the same thermal-aware
+  objective used for candidate ranking, rather than by the floorplanner's
+  internal placement cost alone.
+- Status: Accepted
+- Context: WS1 Hom-Therm in
+  `experiment_v6_48_1_14_4_1600_1600` selected a final partition whose saved
+  floorplan had `T_max=349.013702 K`, worse than Hom-Cost's
+  `347.938110 K`. Inspecting thermal records showed the same partition had a
+  feasible intermediate/final-worker layout with much lower temperature, but
+  the final `RunFloorplanner` chose the SA worker with the best floorplanner
+  cost instead of the best thermal objective.
+- Implementation policy: Add an opt-in `thermal_rerank_floorplans` flag to
+  `ChipletRefiner::RunFloorplanner` and the private `Floorplanner`. When the
+  flag is enabled and thermal evaluation is available, evaluate every valid
+  SA worker geometry for the fixed partition with the thermal evaluator and
+  retain the geometry with the lowest final objective. If every thermal
+  re-rank evaluation fails, fall back to the previous valid-worker
+  floorplanner-cost selection. Enable this only for final thermal-aware
+  homogeneous and heterogeneous calls; leave cost-only and intermediate
+  refinement floorplanning unchanged.
+- Consequences: The floorplan saved with a thermal-aware final result now
+  matches the geometry that actually minimizes the reported final thermal
+  objective among feasible worker layouts considered by that final
+  floorplanner run. The primary output contract remains partition and
+  technology assignment; geometry is still internal/reproducibility state.
+- Validation / follow-up: Build, `thermal_mvp_test`, and a WS1 Hom-Therm rerun
+  passed. Corrected WS1 Hom-Therm reports base cost `54.149265`,
+  `T_max=332.955811 K`, `T_avg=309.553650 K`, comparable objective
+  `65.010154`, and now improves over Hom-Cost's comparable objective
+  `73.435924`. The old Hom-Therm output was archived as
+  `homogeneous_thermal_before_floorplan_rerank`; current analysis artifacts
+  and `main.tex`/`main.pdf` were regenerated with the corrected value. Decide
+  separately whether to rerun the remaining v6 benchmarks under this final
+  floorplan-selection protocol.

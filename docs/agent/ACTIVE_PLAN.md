@@ -40,15 +40,27 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The incumbent-final-selection protocol has been reverted from code on
-2026-05-28 after user testing found the scheme ineffective. ChipletPart no
-longer exposes `--thermal-incumbent-partition` or
-`--thermal-incumbent-techs`, and thermal search returns to the pre-v6 behavior.
-The v6 experiment directories remain as historical diagnostics. `main.tex` was
-not changed for the rollback.
+On 2026-05-29, WS1 Hom-Therm was repaired by thermal re-ranking final
+floorplan candidates for each fixed partition before saving the selected
+geometry. The immediate WS1 rerun is complete; next work should decide whether
+to rerun the other v6 benchmarks with the same final-floorplan protocol or
+keep this as the targeted WS1 correction.
 
 ## Completed Small Tasks
 
+- Implemented final-floorplan thermal re-ranking for thermal-aware final
+  floorplanning on 2026-05-29. `RunFloorplanner` now accepts an opt-in
+  `thermal_rerank_floorplans` flag; standard homogeneous and heterogeneous
+  thermal final-selection paths enable it so the saved geometry is the
+  floorplan with the lowest thermal-aware objective among feasible SA worker
+  outputs for the selected partition. Rerunning WS1 Hom-Therm under
+  `/home/yhsun/Chiplet-Partitioning/experiment_v6_48_1_14_4_1600_1600`
+  changed Hom-Therm from `T_max=349.013702 K` and comparable objective
+  `76.390830` to `T_max=332.955811 K`, `T_avg=309.553650 K`, base cost
+  `54.149265`, and comparable objective `65.010154`. The old output was
+  preserved as `homogeneous_thermal_before_floorplan_rerank`; the current
+  `analysis/summary.csv`, `analysis/analysis.md`, figures, `main.tex`, and
+  `main.pdf` were regenerated with the corrected WS1 values.
 - Reverted the incumbent-final-selection scheme on 2026-05-28. The code files
   touched by commit `87717d9` were restored to their pre-change contents:
   `run_chiplet_test.sh`, `src/ChipletPart.cpp`,

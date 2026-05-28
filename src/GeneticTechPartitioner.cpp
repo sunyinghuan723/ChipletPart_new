@@ -611,7 +611,8 @@ void GeneticTechPartitioner::InitializePopulation(
           thermal_evaluator_ && thermal_evaluator_->Enabled();
       // Refinement mutates the partition, so its geometry must be validated again.
       auto final_floor_result =
-          refiner_->RunFloorplanner(partition, hypergraph_, 200, 50, 0.00001);
+          refiner_->RunFloorplanner(partition, hypergraph_, 200, 50, 0.00001,
+                                    false, thermal_enabled);
       result_aspect_ratios = std::get<0>(final_floor_result);
       result_x_locations = std::get<1>(final_floor_result);
       result_y_locations = std::get<2>(final_floor_result);
@@ -927,7 +928,8 @@ float GeneticTechPartitioner::EvaluateFitness(GeneticSolution &solution) {
             thermal_evaluator_ && thermal_evaluator_->Enabled();
         // Score and preserve only a floorplan for the refined partition state.
         auto final_floor_result = refiner_->RunFloorplanner(
-            solution.partition, hypergraph_, 200, 50, 0.00001);
+            solution.partition, hypergraph_, 200, 50, 0.00001, false,
+            thermal_enabled);
         result_aspect_ratios = std::get<0>(final_floor_result);
         result_x_locations = std::get<1>(final_floor_result);
         result_y_locations = std::get<2>(final_floor_result);
