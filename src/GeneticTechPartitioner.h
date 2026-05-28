@@ -145,14 +145,6 @@ public:
         float separation
     );
 
-    GeneticSolution EvaluateFixedFinalCandidate(
-        const std::vector<int>& partition,
-        const std::vector<std::string>& tech_nodes,
-        const std::string& chiplet_io_file,
-        const std::string& chiplet_netlist_file,
-        const std::string& chiplet_blocks_file
-    );
-
     /**
      * @brief Save the results to files
      * @param solution The solution to save

@@ -142,8 +142,6 @@ void displayUsage(const char* programName) {
   std::cout << "  --thermal_python <path> : Python executable for DeepOHeat inference" << std::endl;
   std::cout << "  --thermal_device <cpu|cuda|cuda:0|cuda:1|auto> : Device for Python thermal inference" << std::endl;
   std::cout << "  --thermal_inference_script <path> : DeepOHeat adapter script path" << std::endl;
-  std::cout << "  --thermal_incumbent_partition <path> : Add a fixed cost-winner partition to thermal final selection" << std::endl;
-  std::cout << "  --thermal_incumbent_techs <path> : Technology-assignment file for a heterogeneous thermal incumbent" << std::endl;
   std::cout << "  --thermal_allow_fallback : Fall back to cost-only if thermal inference fails" << std::endl;
   std::cout << "Examples:" << std::endl;
   std::cout << "  " << programName << " io.xml layer.xml wafer.xml assembly.xml test.xml netlist.xml blocks.txt 0.5 0.25 7nm" << std::endl;
@@ -279,9 +277,7 @@ bool isOptionWithValue(const std::string& option) {
          option == "--thermal_seed" ||
          option == "--thermal_inference_script" ||
          option == "--thermal_device" ||
-         option == "--thermal_python" ||
-         option == "--thermal_incumbent_partition" ||
-         option == "--thermal_incumbent_techs";
+         option == "--thermal_python";
 }
 
 bool isFlagOption(const std::string& option) {
@@ -394,12 +390,6 @@ chiplet::ThermalConfig parseThermalConfig(int argc, char* argv[]) {
   }
   if (getArgValue(argc, argv, "--thermal_device", value)) {
     config.thermal_device = value;
-  }
-  if (getArgValue(argc, argv, "--thermal_incumbent_partition", value)) {
-    config.thermal_incumbent_partition = value;
-  }
-  if (getArgValue(argc, argv, "--thermal_incumbent_techs", value)) {
-    config.thermal_incumbent_techs = value;
   }
   if (!config.thermal_dump_instances.empty()) {
     if (config.thermal_candidate_source.empty()) {

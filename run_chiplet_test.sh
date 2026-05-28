@@ -48,10 +48,6 @@ show_help() {
     echo "                        Directory for generated thermal PNG figures when plotting is enabled"
     echo "  --thermal-allow-fallback"
     echo "                        Fall back to cost-only objective if thermal inference fails"
-    echo "  --thermal-incumbent-partition <parts>"
-    echo "                        Include a fixed cost winner in thermal final selection"
-    echo "  --thermal-incumbent-techs <techs>"
-    echo "                        Technology assignment for a heterogeneous fixed incumbent"
     echo "  --thermal-post-eval-only"
     echo "                        Keep search cost-only and thermal-evaluate only the final best candidate"
     echo "  --help                Display this help message"
@@ -113,8 +109,6 @@ THERMAL_PLOT_FIGURES=false
 THERMAL_CACHE=false
 THERMAL_ALLOW_FALLBACK=false
 THERMAL_POST_EVAL_ONLY=false
-THERMAL_INCUMBENT_PARTITION=""
-THERMAL_INCUMBENT_TECHS=""
 
 # Parse command line arguments
 while [ "$#" -gt 0 ]; do
@@ -259,14 +253,6 @@ while [ "$#" -gt 0 ]; do
             THERMAL_POST_EVAL_ONLY=true
             shift
             ;;
-        --thermal-incumbent-partition|--thermal_incumbent_partition)
-            THERMAL_INCUMBENT_PARTITION="$2"
-            shift 2
-            ;;
-        --thermal-incumbent-techs|--thermal_incumbent_techs)
-            THERMAL_INCUMBENT_TECHS="$2"
-            shift 2
-            ;;
         *)
             echo -e "${RED}Error: Unknown option: $1${NC}"
             show_help
@@ -393,24 +379,6 @@ if [ "$ENABLE_THERMAL" = true ]; then
     if [ "$THERMAL_POST_EVAL_ONLY" = true ]; then
         THERMAL_ARGS+=(--thermal_post_eval_only)
     fi
-    if [ -n "$THERMAL_INCUMBENT_PARTITION" ]; then
-        if [ ! -f "$THERMAL_INCUMBENT_PARTITION" ]; then
-            echo -e "${RED}Error: Thermal incumbent partition not found: ${THERMAL_INCUMBENT_PARTITION}${NC}"
-            exit 1
-        fi
-        THERMAL_ARGS+=(--thermal_incumbent_partition "$THERMAL_INCUMBENT_PARTITION")
-    fi
-    if [ -n "$THERMAL_INCUMBENT_TECHS" ]; then
-        if [ -z "$THERMAL_INCUMBENT_PARTITION" ]; then
-            echo -e "${RED}Error: --thermal-incumbent-techs requires --thermal-incumbent-partition${NC}"
-            exit 1
-        fi
-        if [ ! -f "$THERMAL_INCUMBENT_TECHS" ]; then
-            echo -e "${RED}Error: Thermal incumbent technology file not found: ${THERMAL_INCUMBENT_TECHS}${NC}"
-            exit 1
-        fi
-        THERMAL_ARGS+=(--thermal_incumbent_techs "$THERMAL_INCUMBENT_TECHS")
-    fi
 
     echo -e "${CYAN}Thermal-aware evaluation enabled${NC}"
     if [ "$THERMAL_POST_EVAL_ONLY" = true ]; then
@@ -422,9 +390,6 @@ if [ "$ENABLE_THERMAL" = true ]; then
     echo -e "${BLUE}Thermal device: ${THERMAL_DEVICE}${NC}"
     echo -e "${BLUE}Thermal grid: ${THERMAL_GRID_X}x${THERMAL_GRID_Y}${NC}"
     echo -e "${BLUE}Thermal output directory: ${THERMAL_OUTPUT_DIR}${NC}"
-    if [ -n "$THERMAL_INCUMBENT_PARTITION" ]; then
-        echo -e "${BLUE}Thermal final-selection incumbent: ${THERMAL_INCUMBENT_PARTITION}${NC}"
-    fi
     if [ "$THERMAL_PLOT_FIGURES" = true ]; then
         echo -e "${BLUE}Thermal figure directory: ${THERMAL_FIGURE_DIR}${NC}"
     else

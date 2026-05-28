@@ -21,6 +21,19 @@ revalidation.
 
 ## Current Task
 
+On 2026-05-28, after user testing found the incumbent-final-selection scheme
+ineffective, the code was reverted to the pre-`87717d9` behavior. ChipletPart
+no longer exposes `--thermal-incumbent-partition` or
+`--thermal-incumbent-techs`; the touched code files restored from the parent of
+`87717d9` are `run_chiplet_test.sh`, `src/ChipletPart.cpp`,
+`src/GeneticTechPartitioner.cpp`, `src/GeneticTechPartitioner.h`,
+`src/Main.cpp`, and `src/ThermalConfig.h`. The top-level helper
+`/home/yhsun/Chiplet-Partitioning/experiment_v4_tools/analyze_case.py` also no
+longer treats `cost_incumbent_final_candidate` as a special selected-result
+source. V6 experiment directories remain on disk as historical diagnostics,
+but they no longer describe current executable behavior. `main.tex` was not
+changed.
+
 On 2026-05-27, the user requested a GA100 follow-up using the v6 incumbent
 selection protocol and `ChipletPart/test_data/ga100`. The completed output is
 under `/home/yhsun/Chiplet-Partitioning/experiment_v6_ga100`, using seed

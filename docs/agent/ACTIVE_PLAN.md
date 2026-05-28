@@ -40,16 +40,24 @@ commands, paths, results, or risks. Do not leave project memory only in chat.
 
 ## Active Small Task
 
-The requested GA100 v6 follow-up is complete under
-`/home/yhsun/Chiplet-Partitioning/experiment_v6_ga100`. It uses seed `42`,
-budget `300 K`, `lambda_peak=0.1`, the legacy `2d_power_map` compatibility
-backend, and input data from `ChipletPart/test_data/ga100`. Both thermal
-final outputs retain searched improvements while satisfying the new
-no-worse-final-`J` protocol against admitted Cost candidates. `main.tex` was
-intentionally not changed.
+The incumbent-final-selection protocol has been reverted from code on
+2026-05-28 after user testing found the scheme ineffective. ChipletPart no
+longer exposes `--thermal-incumbent-partition` or
+`--thermal-incumbent-techs`, and thermal search returns to the pre-v6 behavior.
+The v6 experiment directories remain as historical diagnostics. `main.tex` was
+not changed for the rollback.
 
 ## Completed Small Tasks
 
+- Reverted the incumbent-final-selection scheme on 2026-05-28. The code files
+  touched by commit `87717d9` were restored to their pre-change contents:
+  `run_chiplet_test.sh`, `src/ChipletPart.cpp`,
+  `src/GeneticTechPartitioner.cpp`, `src/GeneticTechPartitioner.h`,
+  `src/Main.cpp`, and `src/ThermalConfig.h`. The top-level
+  `/home/yhsun/Chiplet-Partitioning/experiment_v4_tools/analyze_case.py`
+  helper also had the `cost_incumbent_final_candidate` /
+  `final_cost_incumbent` labeling removed. The v6 output directories are kept
+  as diagnostics, but the current code no longer implements that protocol.
 - Completed GA100 experiment v6 on 2026-05-27 under the incumbent protocol.
   Hom-Cost reports comparable objective `38.180714` and
   `T_max=307.387634 K`; Hom-Therm retains its searched winner at objective
@@ -283,6 +291,23 @@ labels and multi-seed comparisons; keep legacy-backend reruns clearly labeled
 as compatibility results.
 
 ## Recent Validation
+
+Incumbent protocol rollback validation on 2026-05-28:
+
+```bash
+rg -n "thermal-incumbent|thermal_incumbent|cost_incumbent_final_candidate|final_cost_incumbent|Fixed cost incumbent|Retained thermally searched winner|Selected fixed cost incumbent|Added fixed cost incumbent" \
+  src run_chiplet_test.sh
+python3 -m py_compile /home/yhsun/Chiplet-Partitioning/experiment_v4_tools/analyze_case.py
+bash -n run_chiplet_test.sh
+cmake --build build --target chipletPart thermal_mvp_test floorplan_retention_test thermal_collect_cli -j 4
+ctest --test-dir build --output-on-failure
+```
+
+Result: passed. The search returns no matches in the ChipletPart code or run
+script, and the top-level analysis helper still compiles after removing the
+v6-only source labels. The run script parses cleanly, the C++ build completed
+with only the existing Eigen `initParallel()` deprecation warning, and both
+CTest tests passed.
 
 GA100 final-selection-incumbent v6 experiment validation on 2026-05-27:
 

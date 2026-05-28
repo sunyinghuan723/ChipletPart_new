@@ -487,7 +487,7 @@ methodology, or experiment-policy decision is made.
   is evaluated under the Thermal run's final floorplan and surrogate
   configuration, and final output is selected by exact final `J` over the
   admitted Cost candidate and thermally searched candidates.
-- Status: Accepted
+- Status: Reverted on 2026-05-28
 - Context: In EPYC experiment v5, `Het-Cost` post-evaluated to comparable
   objective `75.030888`, while `Het-Therm` selected a cooler but worse
   objective `77.873742`. Thermal search alone does not guarantee that a
@@ -506,4 +506,7 @@ methodology, or experiment-policy decision is made.
   `experiment_v6_epyc7282` selects the incumbent for both thermal modes; in
   particular, Het-Therm replaces searched objective `79.808777` with the
   admitted final objective `73.971710`, establishing the intended
-  no-regression behavior for this run.
+  no-regression behavior for this run. User testing later found the scheme
+  ineffective, so the code and CLI were restored to the pre-`87717d9`
+  behavior. Keep the v6 experiments as diagnostics rather than current
+  methodology evidence.
