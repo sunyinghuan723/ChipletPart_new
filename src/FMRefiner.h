@@ -105,7 +105,8 @@ public:
                  const std::string& assembly_process_file = "",
                  const std::string& test_file = "",
                  const std::string& netlist_file = "",
-                 const std::string& blocks_file = "");
+                 const std::string& blocks_file = "",
+                 unsigned seed = 0);
 
   ChipletRefiner(const ChipletRefiner &) = delete;
   ChipletRefiner(ChipletRefiner &) = delete;

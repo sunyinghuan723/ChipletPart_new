@@ -208,6 +208,7 @@ private:
     // Member variables
     std::shared_ptr<Hypergraph> hypergraph_;
     std::vector<std::string> available_tech_nodes_;
+    unsigned int seed_ = 42;
     std::mt19937 rng_;
     ChipletPart* chiplet_part_; // Pointer to ChipletPart for advanced partitioning methods
 

@@ -38,8 +38,7 @@ Matrix<float> GetBlockBalance(const HGraphPtr& hgraph, const std::vector<int>& s
 // Create a simple hypergraph for testing
 HGraphPtr createTestHypergraph(int num_vertices, int num_hyperedges) {
   // Create random vertices and hyperedges
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen(1001u);
   std::uniform_real_distribution<float> weight_dist(1.0, 10.0);
   std::uniform_int_distribution<int> vertex_dist(0, num_vertices - 1);
   
@@ -92,8 +91,7 @@ HGraphPtr createTestHypergraph(int num_vertices, int num_hyperedges) {
 
 // Create an initial random partition
 std::vector<int> createRandomPartition(int num_vertices, int num_parts) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen(2001u);
   std::uniform_int_distribution<int> part_dist(0, num_parts - 1);
   
   std::vector<int> partition(num_vertices);

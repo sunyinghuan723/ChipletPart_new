@@ -40,9 +40,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -59,6 +61,20 @@ int PositiveEnvOrDefault(const char* name, int fallback) {
     }
   }
   return fallback;
+}
+
+std::mt19937 MakeSeededRng(std::initializer_list<unsigned> values) {
+  std::seed_seq seq(values.begin(), values.end());
+  return std::mt19937(seq);
+}
+
+unsigned HashInts(const std::vector<int>& values) {
+  unsigned hash = 2166136261u;
+  for (const int value : values) {
+    hash ^= static_cast<unsigned>(value);
+    hash *= 16777619u;
+  }
+  return hash;
 }
 
 }  // namespace
@@ -117,11 +133,13 @@ Matrix<int> GetNetDegrees(const HGraphPtr& hgraph, const Partition& solution) {
 }
 
 // Constructor
-KLRefiner::KLRefiner(int num_parts, int refiner_iters, int max_swaps, bool floorplanner)
+KLRefiner::KLRefiner(int num_parts, int refiner_iters, int max_swaps,
+                     bool floorplanner, unsigned seed)
     : num_parts_(num_parts), 
       refiner_iters_(refiner_iters), 
       max_swaps_(max_swaps),
-      floorplanner_(floorplanner) {
+      floorplanner_(floorplanner),
+      init_seed_(seed) {
   
   // Get available threads for parallel processing
   int available_threads = omp_utils::get_max_threads();
@@ -447,8 +465,16 @@ GainPair KLRefiner::FindBestSwapPair(const HGraphPtr& hgraph,
           indicesa.reserve(std::min(static_cast<int>(search_a.size()), max_pairs_to_check/10));
           indicesb.reserve(std::min(static_cast<int>(search_b.size()), max_pairs_to_check/10));
           
-          std::random_device rd;
-          std::mt19937 gen(rd());
+          std::mt19937 gen = MakeSeededRng({
+              init_seed_,
+              0x4b4c0001u,
+              static_cast<unsigned>(part_a),
+              static_cast<unsigned>(part_b),
+              static_cast<unsigned>(search_a.size()),
+              static_cast<unsigned>(search_b.size()),
+              HashInts(search_a),
+              HashInts(search_b)
+          });
           
           // Sample vertices from partition A
           std::sample(search_a.begin(), search_a.end(),
@@ -541,8 +567,16 @@ GainPair KLRefiner::FindBestSwapPair(const HGraphPtr& hgraph,
         std::vector<int> indicesa, indicesb;
         if (limit_search) {
           // Same sampling logic for sequential case
-          std::random_device rd;
-          std::mt19937 gen(rd());
+          std::mt19937 gen = MakeSeededRng({
+              init_seed_,
+              0x4b4c0002u,
+              static_cast<unsigned>(part_a),
+              static_cast<unsigned>(part_b),
+              static_cast<unsigned>(search_a.size()),
+              static_cast<unsigned>(search_b.size()),
+              HashInts(search_a),
+              HashInts(search_b)
+          });
           
           indicesa.reserve(std::min(static_cast<int>(search_a.size()), max_pairs_to_check/10));
           indicesb.reserve(std::min(static_cast<int>(search_b.size()), max_pairs_to_check/10));
@@ -887,7 +921,7 @@ KLRefiner::RunFloorplanner(std::vector<int>& partition,
             per_worker_steps,              // max_num_step
             per_worker_perturbations,      // num_perturb_per_step
             worker_cooling_rate,           // cooling_rate
-            42 + worker_id);               // seed
+            init_seed_ + worker_id);       // seed
         
         // Set sequence pairs
         sa->setPosSeq(pos_seq);

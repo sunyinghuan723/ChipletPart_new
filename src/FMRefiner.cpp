@@ -41,6 +41,7 @@
 #include <deque>
 #include <functional>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <list>
 #include <map>
@@ -80,6 +81,20 @@ int PositiveEnvOrDefault(const char* name, int fallback) {
   return fallback;
 }
 
+std::mt19937 MakeSeededRng(std::initializer_list<unsigned> values) {
+  std::seed_seq seq(values.begin(), values.end());
+  return std::mt19937(seq);
+}
+
+unsigned HashInts(const std::vector<int>& values) {
+  unsigned hash = 2166136261u;
+  for (const int value : values) {
+    hash ^= static_cast<unsigned>(value);
+    hash *= 16777619u;
+  }
+  return hash;
+}
+
 }  // namespace
 
 // VertexGain constructor is already defined in PriorityQueue.h
@@ -102,10 +117,11 @@ ChipletRefiner::ChipletRefiner(
     const std::string& assembly_process_file,
     const std::string& test_file,
     const std::string& netlist_file,
-    const std::string& blocks_file)
+    const std::string& blocks_file,
+    unsigned seed)
     : num_parts_(num_parts), refiner_iters_(refiner_iters), max_move_(max_move),
       refiner_iters_default_(refiner_iters), max_move_default_(max_move),
-      reaches_(reaches), floorplanner_(floorplanner) {
+      floorplanner_(floorplanner), init_seed_(seed), reaches_(reaches) {
   // Get available threads using our OpenMP utilities
   num_threads_ = omp_utils::get_max_threads();
   
@@ -1411,9 +1427,16 @@ std::vector<int> ChipletRefiner::FindBoundaryVertices(
     const int random_count = static_cast<int>(num_vertices * random_non_boundary_ratio);
     
     if (random_count > 0) {
-      // Create a random number generator
-      std::random_device rd;
-      std::mt19937 gen(rd());
+      const unsigned boundary_hash = HashInts(boundary_vertices);
+      std::mt19937 gen = MakeSeededRng({
+          init_seed_,
+          0x464d0001u,
+          static_cast<unsigned>(num_vertices),
+          static_cast<unsigned>(num_hyperedges),
+          static_cast<unsigned>(existing_count),
+          static_cast<unsigned>(random_count),
+          boundary_hash
+      });
 
       // We'll use reservoir sampling to efficiently select random vertices
       // This avoids having to construct a full vector of non-boundary vertices
@@ -1432,8 +1455,16 @@ std::vector<int> ChipletRefiner::FindBoundaryVertices(
           std::vector<int>& local_samples = thread_samples[thread_id];
           local_samples.reserve(per_thread_sample);
           
-          // Create thread-local RNG with unique seed
-          std::mt19937 local_gen(rd() + thread_id);
+          std::mt19937 local_gen = MakeSeededRng({
+              init_seed_,
+              0x464d0002u,
+              static_cast<unsigned>(num_vertices),
+              static_cast<unsigned>(num_hyperedges),
+              static_cast<unsigned>(existing_count),
+              static_cast<unsigned>(random_count),
+              boundary_hash,
+              static_cast<unsigned>(thread_id)
+          });
           
           // Each thread processes a subset of vertices
           #pragma omp for schedule(dynamic, 64)

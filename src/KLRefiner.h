@@ -25,7 +25,8 @@ public:
   KLRefiner(int num_parts, 
             int refiner_iters,
             int max_swaps,
-            bool floorplanner = false);
+            bool floorplanner = false,
+            unsigned seed = 0);
 
   // Non-copyable
   KLRefiner(const KLRefiner&) = delete;
@@ -115,6 +116,7 @@ private:
   int refiner_iters_;
   int max_swaps_;
   bool floorplanner_;
+  unsigned init_seed_ = 0;
   float weight_scale_factor_ = 0.01f; // Default scale factor for gain calculations
 
   // Floorplanner-specific variables

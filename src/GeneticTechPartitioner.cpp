@@ -47,10 +47,11 @@ GeneticTechPartitioner::GeneticTechPartitioner(
     float mutation_rate, float crossover_rate, int min_partitions,
     int max_partitions)
     : hypergraph_(hypergraph), available_tech_nodes_(available_tech_nodes),
-      ub_factor_(ub_factor), rng_(seed), num_generations_(num_generations),
+      seed_(seed), rng_(seed), chiplet_part_(nullptr), ub_factor_(ub_factor),
+      num_generations_(num_generations),
       population_size_(population_size), mutation_rate_(mutation_rate),
       crossover_rate_(crossover_rate), min_partitions_(min_partitions),
-      max_partitions_(max_partitions), chiplet_part_(nullptr) {
+      max_partitions_(max_partitions) {
 
   // Ensure min_partitions_ is at least 1
   min_partitions_ = std::max(1, min_partitions_);
@@ -513,7 +514,8 @@ void GeneticTechPartitioner::InitializePopulation(
       chiplet_assembly_process_file, // assembly_process_file
       chiplet_test_file,             // test_file
       chiplet_netlist_file,          // netlist_file
-      chiplet_blocks_file            // blocks_file
+      chiplet_blocks_file,           // blocks_file
+      seed_
   );
 
   // Check if cost model is initialized

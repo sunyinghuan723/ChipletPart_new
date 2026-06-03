@@ -1751,7 +1751,8 @@ void ChipletPart::Partition(
       chiplet_assembly_process_file, // assembly_process_file
       chiplet_test_file,            // test_file
       chiplet_netlist_file,         // netlist_file
-      chiplet_blocks_file           // blocks_file
+      chiplet_blocks_file,          // blocks_file
+      seed_                         // seed
   );
   
   if (hypergraph_->GetNumVertices() > 200) {
@@ -2206,7 +2207,8 @@ void ChipletPart::Partition(
           chiplet_assembly_process_file, // assembly_process_file
           chiplet_test_file,            // test_file
           chiplet_netlist_file,         // netlist_file
-          chiplet_blocks_file           // blocks_file
+          chiplet_blocks_file,          // blocks_file
+          seed_ + static_cast<unsigned>(i) // seed
       );
       if (thermal_evaluator && thermal_evaluator->Enabled()) {
         thread_refiner->SetThermalEvaluator(thermal_evaluator, true);
@@ -2286,7 +2288,8 @@ void ChipletPart::Partition(
               num_parts,          // num_parts
               3,                  // refiner_iters - KL often needs fewer iterations
               50,                 // max_swaps per iteration
-              floorplanning       // use floorplanner
+              floorplanning,      // use floorplanner
+              seed_ + static_cast<unsigned>(i) // seed
           );
           
           // Set appropriate weight scale factor to avoid excessive gain values
@@ -2686,7 +2689,8 @@ void ChipletPart::EvaluatePartition(
       chiplet_assembly_process_file, // assembly_process_file
       chiplet_test_file,            // test_file
       chiplet_netlist_file,         // netlist_file
-      chiplet_blocks_file           // blocks_file
+      chiplet_blocks_file,          // blocks_file
+      seed_                         // seed
   );
   
   if (hypergraph_->GetNumVertices() > 200) {
@@ -3615,7 +3619,8 @@ void ChipletPart::QuickTechPartition(
       chiplet_assembly_process_file, // assembly_process_file
       chiplet_test_file,            // test_file
       chiplet_netlist_file,         // netlist_file
-      chiplet_blocks_file           // blocks_file
+      chiplet_blocks_file,          // blocks_file
+      seed_                         // seed
   );
   
   // Set the technology array
@@ -3973,7 +3978,8 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                     chiplet_assembly_process_file, // assembly_process_file
                     chiplet_test_file,            // test_file
                     chiplet_netlist_file,         // netlist_file
-                    chiplet_blocks_file           // blocks_file
+                    chiplet_blocks_file,          // blocks_file
+                    seed_                         // seed
                 );
                 
                 // Set the tech array
@@ -4089,7 +4095,8 @@ std::tuple<float, std::vector<int>> ChipletPart::EvaluateTechPartition(
                 chiplet_assembly_process_file, // assembly_process_file
                 chiplet_test_file,            // test_file
                 chiplet_netlist_file,         // netlist_file
-                chiplet_blocks_file           // blocks_file
+                chiplet_blocks_file,          // blocks_file
+                seed_                         // seed
             );
             
             // Set up initial aspect ratios, locations, etc.
