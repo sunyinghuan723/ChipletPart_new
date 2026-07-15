@@ -97,8 +97,8 @@ cd ChipletPart/build
   --enable_thermal \
   --thermal_backend package_thermal \
   --thermal_model_path /tmp/deepoheat_package_run/checkpoint_best.pt \
-  --thermal_python /home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
-  --thermal_inference_script /home/yhsun/Chiplet-Partitioning/DeepOHeat/package_thermal/infer_package.py \
+  --thermal_python /path/to/deepoheat-py38/bin/python \
+  --thermal_inference_script ../../DeepOHeat/package_thermal/infer_package.py \
   --thermal_dump_instances /tmp/chipletpart_package_eval \
   --thermal_budget 330 \
   --thermal_lambda_peak 0.001 \

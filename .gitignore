@@ -1,20 +1,67 @@
-# Local build outputs
-build/
-results/
+# Build products and compiled objects
+/build*/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+Testing/
+*.a
+*.o
+*.so
+*.so.*
+*.dylib
+
+# Generated experiment and partitioning outputs
+/results/
 output.map
 *.log
+*.err
+slurm-*.out
+*.cpart.*
+*.genetic_tech_part.*
+*.best_partition.txt
+*.best_tech_assignment.txt
+*.canonical_forms.log
+*.floorplet_part
+*.parts.*
+*.techs.*
+canonical_ga_result*
+tech_assignment.chipletpart.*
+best_partition.aspect_ratios
+best_partition.coords
+*.thermal_result.json
+*.thermal_result.field.npz
+*.npz
+*.pt
+*.pth
 
-# Local dependency/cache directories
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
 .cache/
 .conda-env/
 .conda-pkgs/
-.codex
 
-# Generated partition outputs
-*.cpart.*
-*.genetic_tech_part.*
-*.best_tech_assignment.txt
-*.canonical_forms.log
-canonical_ga_result*
-best_partition.aspect_ratios
-best_partition.coords
+# Editor, operating-system, and local agent metadata
+.DS_Store
+._*
+Thumbs.db
+*~
+*.bak
+*.swp
+*.swo
+.idea/
+.vscode/
+.codex
+AGENTS.md
+/docs/agent/
+/submit_job.sh

@@ -1,0 +1,18 @@
+name: thermal-chipletpart
+channels:
+  - conda-forge
+dependencies:
+  # C++17 build toolchain and libraries used directly by CMakeLists.txt.
+  - cmake>=3.14
+  - ninja
+  - make
+  - c-compiler
+  - cxx-compiler
+  - boost-cpp>=1.71
+  - eigen>=3.4
+
+  # Python utilities for testcase generation, plotting, and reference labels.
+  - python>=3.10
+  - numpy>=1.24
+  - scipy>=1.10
+  - matplotlib-base>=3.7

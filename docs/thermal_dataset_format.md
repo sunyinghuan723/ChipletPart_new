@@ -170,8 +170,9 @@ Example command:
 ```bash
 cd ChipletPart
 rm -rf /tmp/chipletpart_thermal_dataset_v3_pilot
+DEEPOHEAT_PYTHON=/path/to/deepoheat-py38/bin/python
 
-/home/yhsun/Chiplet-Partitioning/DeepOHeat/.conda/deepoheat-py38/bin/python \
+"$DEEPOHEAT_PYTHON" \
   tools/thermal/collect_search_dataset.py \
   --chipletpart_build build \
   --testcase test_data/48_1_14_4_1600_1600 \

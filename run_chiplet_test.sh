@@ -309,7 +309,13 @@ if [ "$ENABLE_THERMAL" = true ]; then
         THERMAL_MODEL_PATH="$DEFAULT_THERMAL_MODEL"
     fi
     if [ -z "$THERMAL_PYTHON" ]; then
-        THERMAL_PYTHON="$DEFAULT_THERMAL_PYTHON"
+        if [ -x "$DEFAULT_THERMAL_PYTHON" ]; then
+            THERMAL_PYTHON="$DEFAULT_THERMAL_PYTHON"
+        elif command -v python3 >/dev/null 2>&1; then
+            THERMAL_PYTHON="$(command -v python3)"
+        else
+            THERMAL_PYTHON="python3"
+        fi
     fi
     if [ -z "$THERMAL_SCRIPT" ]; then
         if [ "$THERMAL_BACKEND" = "package_thermal" ]; then
